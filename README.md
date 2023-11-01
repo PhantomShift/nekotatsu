@@ -9,8 +9,8 @@ First off, why specifically Neko instead of mainline Tachiyomi? No real reason h
 As for why I wanted to transfer backups to Kotatsu in the first place, I just wanted to try it out without having to go through the effort of going through my entire library one by one. The ability to sync via Mangadex is one of the useful features of Neko but I've found that it's sometimes unreliable, whether that's on the part of Neko or Mangadex, I'm not sure, but Kotatsu apparently provides a sync service that also happens to be self-hostable.
 
 ## Generating Protocol Buffer Files
-In case anyone else decides to build this manually and needs to update the Neko protobuf definitions, this command in the repo:
-```
+In case anyone else decides to build this manually and needs to update the Neko protobuf definitions, run this command in the repo directory:
+```bash
 cargo run --bin proto_gen PATH_TO_KOTLIN_DEFINITIONS_DIR >| src/neko.proto
 ```
 and rebuild to have `build.rs` compile the `.proto` file using [prost](https://github.com/tokio-rs/prost)

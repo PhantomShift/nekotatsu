@@ -30,7 +30,7 @@ fn main() {
                         let name = captures.name("name").expect("name should match").as_str();
                         let var_type = captures.name("type").expect("type should match").as_str();
                         let list_type = captures.name("list_type");
-                        let is_optional = captures.name("optinal").is_some();
+                        let is_optional = captures.name("optional").is_some();
                         format!(
                             "    {rep_or_opt}{converted_type} {name} = {tag_number};\n",
                             rep_or_opt = if is_optional {

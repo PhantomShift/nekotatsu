@@ -169,7 +169,7 @@ fn main() -> std::io::Result<()> {
                 writer.write_all(json.as_bytes())?;
             }
             #[allow(unreachable_patterns)]
-            Ok(_) => println!("{name} is empted, ommitted from converted backup"),
+            Ok(_) => println!("{name} is empty, ommitted from converted backup"),
             Err(e) => {
                 println!("Warning: Error occured processing {name}, ommitted from converted backup");
                 println!("Original error: {e}");
