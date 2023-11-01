@@ -5,10 +5,12 @@ package neko.backup;
 
 
 // DirEntry("NekoModels/BackupHistory.kt")
+// Manually fixed; I don't know why it starts at 0 in the original source
+// Should not be a big deal though
 message BrokenBackupHistory {
-    string url = 0;
-    int64 lastRead = 1;
-    int64 readDuration = 2;
+    string url = 1;
+    int64 lastRead = 2;
+    int64 readDuration = 3;
 }
 
 message BackupHistory {
