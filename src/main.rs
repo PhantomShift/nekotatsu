@@ -85,11 +85,11 @@ fn main() -> std::io::Result<()> {
             large_cover_url: Some(manga.thumbnail_url.clone()),
             author: manga.author.clone(),
             state: String::from(match manga.status {
-                1 => "ongoing",
-                2 | 4 => "completed",
-                5 => "cancelled",
-                6 => "hiatus",
-                _ => "unknown"
+                1 => "ONGOING",
+                2 | 4 => "FINISHED",
+                5 => "ABANDONED",
+                6 => "", // not sure if they handle hiatus as abandoned or ongoing; perhaps just left as unknown?
+                _ => ""
             }),
             source: String::from("MANGADEX"),
             tags: [],
