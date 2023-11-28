@@ -60,9 +60,9 @@ fn main() -> std::io::Result<()> {
     for (id, category) in backup.backup_categories.iter().enumerate() {
         result_categories.push(KotatsuCategoryBackup {
             // kotatsu appears to not allow index 0 for category id
-            category_id: id as u32 + 1,
+            category_id: id as i64 + 1,
             created_at: 0,
-            sort_key: category.order as u32,
+            sort_key: category.order,
             title: category.name.clone(),
             order: None,
             track: None,
@@ -98,7 +98,7 @@ fn main() -> std::io::Result<()> {
             for category_id in manga.categories.iter() {
                 result_favourites.push(KotatsuFavouriteBackup {
                     manga_id: kotatsu_manga.id.clone(),
-                    category_id: *category_id as u64 + 1,
+                    category_id: *category_id as i64 + 1,
                     sort_key: 0,
                     created_at: 0,
                     deleted_at: 0,
@@ -119,7 +119,7 @@ fn main() -> std::io::Result<()> {
                 manga_id: kotatsu_manga.id,
                 page_id: 0,
                 chapter_id: get_kotatsu_id("MANGADEX", &chapter.url.replace("/chapter/", "")),
-                page: chapter.last_page_read as u32,
+                page: chapter.last_page_read,
                 scroll: 0,
                 image_url: kotatsu_manga.cover_url.clone(),
                 created_at: 0,
@@ -136,12 +136,12 @@ fn main() -> std::io::Result<()> {
         let newest_cached_chapter = manga.chapters.iter().max_by(|a, b| a.chapter_number.total_cmp(&b.chapter_number));
         let kotatsu_history = KotatsuHistoryBackup {
             manga_id: kotatsu_manga.id.clone(),
-            created_at: manga.date_added as u64,
-            updated_at: manga.last_update as u64,
+            created_at: manga.date_added,
+            updated_at: manga.last_update,
             chapter_id: if let Some(latest) = latest_chapter {
                 get_kotatsu_id("MANGADEX", &latest.url.replace("/chapter/", ""))
             } else {0},
-            page: if let Some(latest) = latest_chapter {latest.last_page_read as u32} else {0},
+            page: if let Some(latest) = latest_chapter {latest.last_page_read} else {0},
             scroll: 0.0,
             percent: match (latest_chapter, newest_cached_chapter) {
                 (Some(latest), Some(newest)) if latest.chapter_number > 0.0 => {

@@ -2,7 +2,7 @@ use serde::Serialize;
 
 #[derive(Debug, Serialize, Clone)]
 pub struct KotatsuMangaBackup {
-    pub id: u64,
+    pub id: i64,
     pub title: String,
     pub alt_tile: Option<String>,
     pub url: String,
@@ -21,11 +21,11 @@ pub struct KotatsuMangaBackup {
 
 #[derive(Debug, Serialize)]
 pub struct KotatsuHistoryBackup {
-    pub manga_id: u64,
-    pub created_at: u64,
-    pub updated_at: u64,
-    pub chapter_id: u64,
-    pub page: u32,
+    pub manga_id: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub chapter_id: i64,
+    pub page: i32,
     pub scroll: f32,
     pub percent: f32,
     pub manga: KotatsuMangaBackup,
@@ -33,23 +33,23 @@ pub struct KotatsuHistoryBackup {
 
 #[derive(Debug, Serialize)]
 pub struct KotatsuCategoryBackup {
-    pub category_id: u32,
-    pub created_at: u64,
-    pub sort_key: u32,
+    pub category_id: i64,
+    pub created_at: i64,
+    pub sort_key: i32,
     pub title: String,
     pub order: Option<String>,
     pub track: Option<bool>,
     pub show_in_lib: Option<bool>,
-    pub deleted_at: u64,
+    pub deleted_at: i64,
 }
 
 #[derive(Debug, Serialize)]
 pub struct KotatsuFavouriteBackup {
-    pub manga_id: u64,
-    pub category_id: u64,
-    pub sort_key: u32,
-    pub created_at: u64,
-    pub deleted_at: u64,
+    pub manga_id: i64,
+    pub category_id: i64,
+    pub sort_key: i32,
+    pub created_at: i64,
+    pub deleted_at: i64,
     pub manga: KotatsuMangaBackup
 }
 
@@ -61,19 +61,19 @@ pub struct KotatsuBookmarkBackup {
 }
 #[derive(Debug, Serialize)]
 pub struct KotatsuBookmarkEntry {
-    pub manga_id: u64,
-    pub page_id: u64,
-    pub chapter_id: u64,
-    pub page: u32,
-    pub scroll: u32,
+    pub manga_id: i64,
+    pub page_id: i64,
+    pub chapter_id: i64,
+    pub page: i32,
+    pub scroll: i32,
     pub image_url: String,
-    pub created_at: u64,
+    pub created_at: i64,
     pub percent: f32
 }
 
-pub fn get_kotatsu_id(source_name: &str, url: &str) -> u64 {
-    let mut id: u64 = 1125899906842597;
-    source_name.chars().for_each(|c| id = (31u64.overflowing_mul(id)).0.overflowing_add(c as u64).0);
-    url.chars().for_each(|c| id = (31u64.overflowing_mul(id)).0.overflowing_add(c as u64).0);
-    return id as u64
+pub fn get_kotatsu_id(source_name: &str, url: &str) -> i64 {
+    let mut id: i64 = 1125899906842597;
+    source_name.chars().for_each(|c| id = (31i64.overflowing_mul(id)).0.overflowing_add(c as i64).0);
+    url.chars().for_each(|c| id = (31i64.overflowing_mul(id)).0.overflowing_add(c as i64).0);
+    return id
 }
