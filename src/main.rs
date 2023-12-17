@@ -88,7 +88,7 @@ fn main() -> std::io::Result<()> {
                 1 => "ONGOING",
                 2 | 4 => "FINISHED",
                 5 => "ABANDONED",
-                6 => "", // not sure if they handle hiatus as abandoned or ongoing; perhaps just left as unknown?
+                6 => "PAUSED",
                 _ => ""
             }),
             source: String::from("MANGADEX"),
@@ -134,10 +134,15 @@ fn main() -> std::io::Result<()> {
             })
         }
         let newest_cached_chapter = manga.chapters.iter().max_by(|a, b| a.chapter_number.total_cmp(&b.chapter_number));
+        let last_read = manga.history.iter().max_by(|l, r| l.last_read.cmp(&r.last_read)).map(|entry| entry.last_read).unwrap_or(manga.last_update);
+        if last_read != 0 {
+            println!("{}", kotatsu_manga.id)
+        }
         let kotatsu_history = KotatsuHistoryBackup {
             manga_id: kotatsu_manga.id.clone(),
             created_at: manga.date_added,
-            updated_at: manga.last_update,
+            // updated_at: manga.last_update,
+            updated_at: last_read,
             chapter_id: if let Some(latest) = latest_chapter {
                 get_kotatsu_id("MANGADEX", &latest.url.replace("/chapter/", ""))
             } else {0},
