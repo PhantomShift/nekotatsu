@@ -1,6 +1,6 @@
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct KotatsuMangaBackup {
     pub id: i64,
     pub title: String,
@@ -19,7 +19,7 @@ pub struct KotatsuMangaBackup {
     pub tags: [String;0],
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct KotatsuHistoryBackup {
     pub manga_id: i64,
     pub created_at: i64,
@@ -31,7 +31,7 @@ pub struct KotatsuHistoryBackup {
     pub manga: KotatsuMangaBackup,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct KotatsuCategoryBackup {
     pub category_id: i64,
     pub created_at: i64,
@@ -43,7 +43,7 @@ pub struct KotatsuCategoryBackup {
     pub deleted_at: i64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct KotatsuFavouriteBackup {
     pub manga_id: i64,
     pub category_id: i64,
@@ -53,13 +53,13 @@ pub struct KotatsuFavouriteBackup {
     pub manga: KotatsuMangaBackup
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct KotatsuBookmarkBackup {
     pub manga: KotatsuMangaBackup,
     pub tags: [String;0],
     pub bookmarks: Vec<KotatsuBookmarkEntry>
 }
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct KotatsuBookmarkEntry {
     pub manga_id: i64,
     pub page_id: i64,

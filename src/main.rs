@@ -1,5 +1,6 @@
-use std::io::{self, Read, Write};
+use std::{io::{self, Read, Write}, path::PathBuf, collections::HashMap};
 
+use flate2::{write::GzEncoder, Compression};
 use prost::Message;
 
 pub mod kotatsu;
@@ -21,27 +22,7 @@ fn decode_gzip_backup(path: &str) -> std::io::Result<Vec<u8>> {
     return Ok(buf)
 }
 
-fn main() -> std::io::Result<()> {
-    if std::env::args().len() < 2 {
-        println!("Usage: {} (input neko.tachibk) (optional output name)", std::env::args().nth(0).expect("executable should exist by definition"));
-        return Ok(())
-    }
-    let input_path = std::env::args().nth(1).unwrap();
-    let output_path = std::env::args().nth(2).unwrap_or(String::from("neko_converted"));
-    let output_path = std::path::Path::new(&output_path).with_extension("").with_extension("zip");
-    if output_path.exists() {
-        print!("File with name {} already exists; overwrite? Y(es)/N(o): ", output_path.display());
-        io::stdout().flush()?;
-        let mut buf = String::new();
-        io::stdin().read_line(&mut buf)?;
-        match buf.trim_end().to_lowercase().as_str() {
-            "y" | "yes" => (),
-            _ => {
-                println!("Conversion cancelled");
-                return Ok(());
-            }
-        }
-    }
+fn neko_to_kotatsu(input_path: String, output_path: PathBuf) -> std::io::Result<()> {
     let neko_read = decode_gzip_backup(&input_path)
         .or_else(|e| {
             Err(match e.kind() {
@@ -185,4 +166,131 @@ fn main() -> std::io::Result<()> {
 
     println!("Conversion completed successfully, output: {}", output_path.display());
     Ok(())
+}
+
+fn kotatsu_to_neko_manga(k: &KotatsuMangaBackup) -> nekotatsu::neko::BackupManga {
+    nekotatsu::neko::BackupManga {
+        source: 2499283573021220255, // Not sure if this is a volatile value
+        url: k.public_url.clone(),
+        title: k.title.clone(),
+        artist: k.author.clone(), // Kotatsu doesn't differentiate
+        author: k.author.clone(),
+        status: match k.state.as_str() {
+            "ONGOING" => 1,
+            "FINISHED" => 2,
+            "ABANDONED" => 5,
+            "PAUSED" => 6,
+            _ => 0
+        },
+        thumbnail_url: k.cover_url.strip_suffix(".256.jpg").map(str::to_string).unwrap_or(k.cover_url.clone()),
+
+        ..Default::default()
+    }
+}
+
+fn kotatsu_to_neko(input_path: String, output_path: PathBuf) -> std::io::Result<()> {
+    // I would at the very least like to be able to get the latest chapter and the bookmarks
+    // but the process of getting the URL from the ID is not reasonably reversible as far as I can see
+    println!("Note: limited support. Chapter information (including history and bookmarks) cannot be converted from Kotatsu backups.");
+    
+    let bytes = std::fs::File::open(&input_path)?;
+    let mut reader = zip::read::ZipArchive::new(bytes)?;
+    let mut history: Option<Vec<KotatsuHistoryBackup>> = None;
+    let mut categories: Option<Vec<KotatsuCategoryBackup>> = None;
+    let mut favourites: Option<Vec<KotatsuFavouriteBackup>> = None;
+    // let mut bookmarks: Option<Vec<KotatsuBookmarkBackup>> = None;
+    for i in 0..reader.len() {
+        let file = reader.by_index(i)?;
+        println!("File: {}", file.name());
+        match file.name() {
+            "history" => history = Some(serde_json::from_reader(file)?),
+            "categories" => categories = Some(serde_json::from_reader(file)?),
+            "favourites" => favourites = Some(serde_json::from_reader(file)?),
+            // "bookmarks" => bookmarks = Some(serde_json::from_reader(file)?),
+            _ => ()
+        }
+    }
+
+    let mut neko_manga: HashMap<i64, nekotatsu::neko::BackupManga> = HashMap::new();
+    let mut neko_categories: HashMap<i64, nekotatsu::neko::BackupCategory> = HashMap::new();
+    if let Some(history) = history {
+        for entry in history {
+            if !neko_manga.contains_key(&entry.manga_id) {
+                neko_manga.insert(entry.manga_id, kotatsu_to_neko_manga(&entry.manga));
+            }
+        }
+    }
+    if let Some(categories) = categories {
+        for entry in categories {
+            if !neko_categories.contains_key(&entry.category_id) {
+                neko_categories.insert(entry.category_id, nekotatsu::neko::BackupCategory {
+                    name: entry.title.clone(), 
+                    order: entry.sort_key, 
+                    ..Default::default()
+                });
+            }
+        }
+    }
+    if let Some(favourites) = favourites {
+        for entry in favourites {
+            if !neko_manga.contains_key(&entry.manga_id) {
+                neko_manga.insert(entry.manga_id, kotatsu_to_neko_manga(&entry.manga));
+            }
+            let manga = neko_manga.get_mut(&entry.manga_id).expect("inserted if didnt exist");
+            manga.categories.push(entry.category_id as i32);
+        }
+    }
+
+    let backup = nekotatsu::neko::Backup {
+        backup_manga: neko_manga.into_iter().map(|e|e.1).collect(),
+        backup_categories: neko_categories.into_iter().map(|e|e.1).collect()
+    };
+    let mut buffer = backup.encode_to_vec();
+    let mut output = std::fs::File::create(output_path.clone())?;
+    let mut encoder = GzEncoder::new(&mut output, Compression::fast());
+    encoder.write_all(&mut buffer)?;
+
+    println!("Conversion completed successfully, output: {}", output_path.display());
+
+    Ok(())
+}
+
+fn main() -> std::io::Result<()> {
+    let args = std::env::args().collect::<Vec<_>>();
+    if args.len() < 2 {
+        println!("Usage: {} (input neko.tachibk) (optional output name)", args[0]);
+        return Ok(())
+    }
+    let reverse = args.contains(&String::from("-r")) || args.contains(&String::from("--reverse"));
+
+    let input_path = args[1].to_owned();
+    let output_path = args.get(2).map(String::to_owned).unwrap_or(if reverse {
+        String::from("kotatsu_converted")
+    } else {
+        String::from("neko_converted")
+    });
+    let output_path = std::path::Path::new(&output_path).with_extension("").with_extension(if reverse {
+        "tachibk"
+    } else {
+        "zip"
+    });
+    if output_path.exists() {
+        print!("File with name {} already exists; overwrite? Y(es)/N(o): ", output_path.display());
+        io::stdout().flush()?;
+        let mut buf = String::new();
+        io::stdin().read_line(&mut buf)?;
+        match buf.trim_end().to_lowercase().as_str() {
+            "y" | "yes" => (),
+            _ => {
+                println!("Conversion cancelled");
+                return Ok(());
+            }
+        }
+    }
+
+    if reverse {
+        kotatsu_to_neko(input_path, output_path)
+    } else {
+        neko_to_kotatsu(input_path, output_path)
+    }
 }
