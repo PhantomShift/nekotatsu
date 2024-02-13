@@ -1,15 +1,148 @@
-use std::{io::{self, Read, Write}, path::PathBuf, collections::HashMap};
+use std::{collections::HashMap, io::{self, Read, Write}, path::PathBuf, sync::Mutex};
 
 use flate2::{write::GzEncoder, Compression};
+use once_cell::sync::OnceCell;
 use prost::Message;
+use clap::{Parser, Subcommand};
 
-pub mod kotatsu;
-use kotatsu::*;
-
+pub mod extensions;
 pub mod nekotatsu {
     pub mod neko {
         include!(concat!(env!("OUT_DIR"), "/neko.backup.rs"));
     }
+}
+pub mod kotatsu;
+use kotatsu::*;
+
+use crate::extensions::get_source;
+
+pub static TACHI_SOURCE_PATH: OnceCell<String> = OnceCell::new();
+pub static KOTATSU_PARSE_PATH: OnceCell<String> = OnceCell::new();
+
+// Simple CLI tool that converts Neko backups into Kotatsu backups
+#[derive(Debug, Parser)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[command(subcommand)]
+    command: Option<Commands>
+}
+
+#[derive(Debug, Subcommand)]
+enum Commands {
+    /// Convert a Neko/Tachiyomi backup into one that Kotatsu can read
+    Convert {
+        /// Path to Neko/Tachi backup 
+        input: String,
+
+        /// Optional output name
+        #[arg(short, long)]
+        output: Option<String>,
+
+        /// Path to Tachiyomi source information (minified) json
+        #[arg(short, long, default_value_t = String::from("tachi_sources.json"))]
+        tachi_path: String,
+
+        /// Path to Kotatsu parsers information 
+        #[arg(short, long, next_line_help = true, default_value_t = String::from("kotatsu_parsers.json"))]
+        kotatsu_path: String,
+
+        /// Display some additional information
+        #[arg(short, long)]
+        verbose: bool,
+
+        /// Convert to Neko instead
+        #[arg(short, long)]
+        reverse: bool,
+    },
+
+    /// Downloads latest Tachiyomi source information and
+    /// updates Kotatsu parser list. The resulting files are saved in the directory as `tachi_sources.json` and `kotatsu_parsers.json`.
+    Update {
+        /// Download URL for Kotatsu parsers repo.
+        #[arg(short, long, default_value_t = String::from("https://github.com/KotatsuApp/kotatsu-parsers/archive/refs/heads/master.zip"))]
+        kotatsu_link: String,
+
+        /// Download URL for Tachiyomi extension json list (minified)
+        #[arg(short, long, default_value_t = String::from("https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"))]
+        tachi_link: String,
+
+        /// Force download of files even if they already exist
+        #[arg(short, long)]
+        force_download: bool,
+    },
+}
+
+fn manga_get_source_name(manga: &nekotatsu::neko::BackupManga) -> String {
+    static SOURCES: OnceCell<Mutex<HashMap<i64, String>>> = OnceCell::new();
+    static KOTATSU_PARSER_LIST: OnceCell<Vec<KotatsuParser>> = OnceCell::new();
+
+    match manga.source {
+        // Hardcoded (known tachi IDs)
+        2499283573021220255 => "MANGADEX".to_owned(),
+        1998944621602463790 => "MANGAPLUSPARSER_EN".to_owned(),
+
+        // Other online sources
+        _ => {
+            let sources = SOURCES.get_or_init(|| Mutex::new(HashMap::new()));
+            let mut lock = sources.lock().unwrap();
+            let source = lock.entry(manga.source).or_insert_with(|| {
+                let parser_list = KOTATSU_PARSER_LIST.get_or_try_init(|| {
+                    let list = std::fs::read_to_string(KOTATSU_PARSE_PATH.get().ok_or(io::Error::new(io::ErrorKind::NotFound, "Kotatsu path not initialized"))?)?;
+                    let r: Result<Vec<KotatsuParser>, serde_json::error::Error> = serde_json::from_str(&list);
+                    r.map_err(|_e| {
+                        io::Error::new(io::ErrorKind::InvalidData, "Error reading Kotatsu parser list")
+                    })
+                });
+
+                if let Ok(parser_list) = parser_list {
+                    parser_list.iter().find(|p| {
+                        if let Ok(source) = extensions::get_source(manga.source) {
+                            (p.name.to_lowercase() == source.name) || (p.domains.contains(&source.baseUrl.trim_start_matches("https://").to_string()))
+                        } else {
+                            false
+                        }
+                    }).map_or(String::from("UNKNOWN"), |p| p.name.clone())
+                } else {
+                    String::from("UNKNOWN")
+                }
+            });
+
+            source.clone()
+        }
+    }
+}
+
+fn manga_to_kotatsu(manga: &nekotatsu::neko::BackupManga) -> Result<KotatsuMangaBackup, io::Error> {
+    let source_info = extensions::get_source(manga.source)?;
+    let domain = source_info.baseUrl;
+    let source_name = manga_get_source_name(manga);
+    let relative_url = kotatsu::correct_url(&source_name, &manga.url);
+    // value used when calling generateUid
+    let manga_identifier = kotatsu::correct_identifier(&source_name, &relative_url);
+
+    let kotatsu_manga = KotatsuMangaBackup {
+        id: get_kotatsu_id(&source_name, &manga_identifier),
+        title: manga.title.clone(),
+        alt_tile: None,
+        url: relative_url.clone(),
+        public_url: format!("{domain}{relative_url}"),
+        rating: -1.0,
+        nsfw: false,
+        cover_url: format!("{}.256.jpg", manga.thumbnail_url),
+        large_cover_url: Some(manga.thumbnail_url.clone()),
+        author: manga.author.clone(),
+        state: String::from(match manga.status {
+            1 => "ONGOING",
+            2 | 4 => "FINISHED",
+            5 => "ABANDONED",
+            6 => "PAUSED",
+            _ => ""
+        }),
+        source: source_name.clone(),
+        tags: [],
+    };
+
+    return Ok(kotatsu_manga);
 }
 
 fn decode_gzip_backup(path: &str) -> std::io::Result<Vec<u8>> {
@@ -22,7 +155,7 @@ fn decode_gzip_backup(path: &str) -> std::io::Result<Vec<u8>> {
     return Ok(buf)
 }
 
-fn neko_to_kotatsu(input_path: String, output_path: PathBuf) -> std::io::Result<()> {
+fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool) -> std::io::Result<()> {
     let neko_read = decode_gzip_backup(&input_path)
         .or_else(|e| {
             Err(match e.kind() {
@@ -38,6 +171,11 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf) -> std::io::Result<
     let mut result_favourites = Vec::new();
     let mut result_history = Vec::new();
     let mut result_bookmarks = Vec::new();
+    
+    let mut total_manga = 0;
+    let mut errored_manga = 0;
+    let mut errored_sources = HashMap::new();
+
     for (id, category) in backup.backup_categories.iter().enumerate() {
         result_categories.push(KotatsuCategoryBackup {
             // kotatsu appears to not allow index 0 for category id
@@ -53,28 +191,19 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf) -> std::io::Result<
     }
 
     for manga in backup.backup_manga.iter() {
-        let manga_url = manga.url.replace("/manga/", "");
-        let kotatsu_manga = KotatsuMangaBackup {
-            id: get_kotatsu_id("MANGADEX", &manga_url),
-            title: manga.title.clone(),
-            alt_tile: None,
-            url: manga_url.clone(),
-            public_url: format!("https://mangadex.org/title/{manga_url}"),
-            rating: -1.0,
-            nsfw: false,
-            cover_url: format!("{}.256.jpg", manga.thumbnail_url),
-            large_cover_url: Some(manga.thumbnail_url.clone()),
-            author: manga.author.clone(),
-            state: String::from(match manga.status {
-                1 => "ONGOING",
-                2 | 4 => "FINISHED",
-                5 => "ABANDONED",
-                6 => "PAUSED",
-                _ => ""
-            }),
-            source: String::from("MANGADEX"),
-            tags: [],
-        };
+        total_manga += 1;
+        let kotatsu_manga = manga_to_kotatsu(&manga)?;
+
+        if kotatsu_manga.source == "UNKNOWN" {
+            let source = get_source(manga.source)?;
+            if verbose {
+                println!("[WARNING] Unable to convert {} from source {} ({})", manga.title, source.name, source.baseUrl );
+            }
+            errored_manga += 1;
+            errored_sources.insert(source.name, source.baseUrl);
+            continue;
+        }
+
         if manga.categories.len() > 0 {
             for category_id in manga.categories.iter() {
                 result_favourites.push(KotatsuFavouriteBackup {
@@ -99,7 +228,7 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf) -> std::io::Result<
             Some(KotatsuBookmarkEntry {
                 manga_id: kotatsu_manga.id,
                 page_id: 0,
-                chapter_id: get_kotatsu_id("MANGADEX", &chapter.url.replace("/chapter/", "")),
+                chapter_id: get_kotatsu_id(&kotatsu_manga.source, &correct_identifier(&kotatsu_manga.source, &chapter.url)),
                 page: chapter.last_page_read,
                 scroll: 0,
                 image_url: kotatsu_manga.cover_url.clone(),
@@ -116,16 +245,12 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf) -> std::io::Result<
         }
         let newest_cached_chapter = manga.chapters.iter().max_by(|a, b| a.chapter_number.total_cmp(&b.chapter_number));
         let last_read = manga.history.iter().max_by(|l, r| l.last_read.cmp(&r.last_read)).map(|entry| entry.last_read).unwrap_or(manga.last_update);
-        if last_read != 0 {
-            println!("{}", kotatsu_manga.id)
-        }
         let kotatsu_history = KotatsuHistoryBackup {
             manga_id: kotatsu_manga.id.clone(),
             created_at: manga.date_added,
-            // updated_at: manga.last_update,
             updated_at: last_read,
             chapter_id: if let Some(latest) = latest_chapter {
-                get_kotatsu_id("MANGADEX", &latest.url.replace("/chapter/", ""))
+                get_kotatsu_id(&kotatsu_manga.source, &correct_identifier(&kotatsu_manga.source, &latest.url))
             } else {0},
             page: if let Some(latest) = latest_chapter {latest.last_page_read} else {0},
             scroll: 0.0,
@@ -164,7 +289,16 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf) -> std::io::Result<
     }
     writer.finish()?;
 
-    println!("Conversion completed successfully, output: {}", output_path.display());
+    if errored_manga > 0 {
+        println!("{errored_manga} of {total_manga} manga and {} sources failed to convert.", errored_sources.iter().count());
+        if !verbose {
+            println!("Try running again with verbose (-v) on for details");
+        }
+        println!("Conversion completed with errors, output: {}", output_path.display());
+    } else {
+        println!("{total_manga} manga successfully converted, output: {}", output_path.display());
+    }
+
     Ok(())
 }
 
@@ -256,41 +390,78 @@ fn kotatsu_to_neko(input_path: String, output_path: PathBuf) -> std::io::Result<
 }
 
 fn main() -> std::io::Result<()> {
-    let args = std::env::args().collect::<Vec<_>>();
-    if args.len() < 2 {
-        println!("Usage: {} (input neko.tachibk) (optional output name)", args[0]);
-        return Ok(())
-    }
-    let reverse = args.contains(&String::from("-r")) || args.contains(&String::from("--reverse"));
+    let args = Args::parse();
 
-    let input_path = args[1].to_owned();
-    let output_path = args.get(2).map(String::to_owned).unwrap_or(if reverse {
-        String::from("kotatsu_converted")
-    } else {
-        String::from("neko_converted")
-    });
-    let output_path = std::path::Path::new(&output_path).with_extension("").with_extension(if reverse {
-        "tachibk"
-    } else {
-        "zip"
-    });
-    if output_path.exists() {
-        print!("File with name {} already exists; overwrite? Y(es)/N(o): ", output_path.display());
-        io::stdout().flush()?;
-        let mut buf = String::new();
-        io::stdin().read_line(&mut buf)?;
-        match buf.trim_end().to_lowercase().as_str() {
-            "y" | "yes" => (),
-            _ => {
-                println!("Conversion cancelled");
-                return Ok(());
+    match args.command {
+        Some(Commands::Update { kotatsu_link, tachi_link , force_download}) => {
+
+            if force_download || !std::path::Path::new("tachi_sources.json").exists() {
+                let response = reqwest::blocking::get(tachi_link);
+                if let Ok(response) = response {
+                    let text = response.text().unwrap();
+                    std::fs::write("tachi_sources.json", text)?;
+                    println!("Successfully updated extension info.");
+                } else {
+                    println!("Failed to download source info.");
+                    return Ok(());
+                }
             }
-        }
-    }
 
-    if reverse {
-        kotatsu_to_neko(input_path, output_path)
-    } else {
-        neko_to_kotatsu(input_path, output_path)
+            if force_download || !std::path::Path::new("kotatsu-parsers.zip").exists() {
+                let response = reqwest::blocking::get(kotatsu_link);
+                if let Ok(mut response) = response {
+                    let mut buf = Vec::new();
+                    let _ = response.copy_to(&mut buf);
+                    std::fs::write("kotatsu-parsers.zip", buf)?;
+                    println!("Successfully updated extension info.");
+                } else {
+                    println!("Failed to download parser info.");
+                    return Ok(());
+                }
+            }
+    
+            kotatsu::update_parsers("kotatsu-parsers.zip")?;
+            println!("Successfully updated parser info.");
+
+            Ok(())
+        }
+
+        Some(Commands::Convert { input, output, kotatsu_path, tachi_path, verbose, reverse }) => {
+            let _ = TACHI_SOURCE_PATH.set(tachi_path);
+            let _ = KOTATSU_PARSE_PATH.set(kotatsu_path);
+
+            let input_path = input;
+            let output_path = output.unwrap_or(if reverse {
+                String::from("kotatsu_converted")
+            } else {
+                String::from("neko_converted")
+            });
+            let output_path = std::path::Path::new(&output_path).with_extension("").with_extension(if reverse {
+                "tachibk"
+            } else {
+                "zip"
+            });
+            if output_path.exists() {
+                print!("File with name {} already exists; overwrite? Y(es)/N(o): ", output_path.display());
+                io::stdout().flush()?;
+                let mut buf = String::new();
+                io::stdin().read_line(&mut buf)?;
+                match buf.trim_end().to_lowercase().as_str() {
+                    "y" | "yes" => (),
+                    _ => {
+                        println!("Conversion cancelled");
+                        return Ok(());
+                    }
+                }
+            }
+        
+            if reverse {
+                kotatsu_to_neko(input_path, output_path)
+            } else {
+                neko_to_kotatsu(input_path, output_path, verbose)
+            }
+        },
+
+        None => Ok(())
     }
 }
