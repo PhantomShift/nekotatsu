@@ -19,7 +19,7 @@ jobs:
             archive: zip
     steps:
     - name: update protoc
-      run: apt install -y protobuf-compiler
+      run: sudo apt-get install protobuf-compiler
     - uses: actions/checkout@master
     - name: Compile and release
       uses: rust-build/rust-build.action@v1.4.4
