@@ -24,7 +24,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        TOOLCHAIN_VERSION: stable
+        TOOLCHAIN_VERSION: 1.74
         # Output target
         RUSTTARGET: ${{ matrix.target }}
         # List of extra files to include in build
