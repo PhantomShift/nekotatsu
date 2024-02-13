@@ -18,6 +18,8 @@ jobs:
           - target: x86_64-apple-darwin
             archive: zip
     steps:
+    - name: update protoc
+      run: apt install -y protobuf-compiler
     - uses: actions/checkout@master
     - name: Compile and release
       uses: rust-build/rust-build.action@v1.4.4

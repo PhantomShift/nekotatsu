@@ -19,4 +19,3 @@ zip = { version = "0.6.6", features = ["deflate-zlib"] }
 
 [build-dependencies]
 prost-build = "0.12.1"
-protobuf-src = "1.1.0"
