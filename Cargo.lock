@@ -774,7 +774,6 @@ dependencies = [
  "lazy_static",
  "once_cell",
  "prost",
- "prost-build",
  "regex",
  "reqwest",
  "serde",
