@@ -12,21 +12,21 @@ jobs:
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             bin: nekotatsu
-            name: nekotatsu-Linux-GNU-x86_64.tar.gz
+            name: nekotatsu-${{github.ref_name}}-Linux-GNU-x86_64.tar.gz
             command: build
 
           - release_for: Windows-x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             bin: nekotatsu.exe
-            name: nekotatsu-Windows-x86_64.zip
+            name: nekotatsu-${{github.ref_name}}-Windows-x86_64.zip
             command: both
 
           - release_for: macOS-x86_64
             os: macOS-latest
             target: x86_64-apple-darwin
             bin: nekotatsu
-            name: nekotatsu-Darwin-x86_64.tar.gz
+            name: nekotatsu-${{github.ref_name}}-Darwin-x86_64.tar.gz
             command: both
 
     runs-on: ${{ matrix.platform.os }}
