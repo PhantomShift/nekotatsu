@@ -8,7 +8,7 @@ use clap::{Parser, Subcommand};
 pub mod extensions;
 pub mod nekotatsu {
     pub mod neko {
-        include!(concat!(env!("OUT_DIR"), "/neko.backup.rs"));
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/neko.backup.rs"));
     }
 }
 pub mod kotatsu;
