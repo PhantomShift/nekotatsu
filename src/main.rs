@@ -19,12 +19,12 @@ use crate::extensions::get_source;
 pub static TACHI_SOURCE_PATH: OnceCell<String> = OnceCell::new();
 pub static KOTATSU_PARSE_PATH: OnceCell<String> = OnceCell::new();
 
-// Simple CLI tool that converts Neko backups into Kotatsu backups
+/// Simple CLI tool that converts Neko backups into Kotatsu backups
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
 struct Args {
     #[command(subcommand)]
-    command: Option<Commands>
+    command: Commands
 }
 
 #[derive(Debug, Subcommand)]
@@ -393,7 +393,7 @@ fn main() -> std::io::Result<()> {
     let args = Args::parse();
 
     match args.command {
-        Some(Commands::Update { kotatsu_link, tachi_link , force_download}) => {
+        Commands::Update { kotatsu_link, tachi_link , force_download} => {
 
             if force_download || !std::path::Path::new("tachi_sources.json").exists() {
                 let response = reqwest::blocking::get(tachi_link);
@@ -426,7 +426,7 @@ fn main() -> std::io::Result<()> {
             Ok(())
         }
 
-        Some(Commands::Convert { input, output, kotatsu_path, tachi_path, verbose, reverse }) => {
+        Commands::Convert { input, output, kotatsu_path, tachi_path, verbose, reverse } => {
             let _ = TACHI_SOURCE_PATH.set(tachi_path);
             let _ = KOTATSU_PARSE_PATH.set(kotatsu_path);
 
@@ -461,7 +461,5 @@ fn main() -> std::io::Result<()> {
                 neko_to_kotatsu(input_path, output_path, verbose)
             }
         },
-
-        None => Ok(())
     }
 }
