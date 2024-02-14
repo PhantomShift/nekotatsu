@@ -22,12 +22,16 @@ As for why I wanted to transfer backups to Kotatsu in the first place, I just wa
 
 Also considering recent events around Tachiyomi, although its forks are still alive and well, I believe that having the choice to try out different options is a good thing, which is why I have done a little bit of work towards supporting non-Neko forks.
 
-## Generating Protocol Buffer Files
+## Generating and Compiling Protocol Buffer Files
 In case anyone else decides to build this manually and needs to update the Neko protobuf definitions, run this command in the repo directory:
 ```bash
-cargo run --bin proto_gen PATH_TO_KOTLIN_DEFINITIONS_DIR >| src/neko.proto
+cargo run -p tools generate <PATH_TO_KOTLIN_DEFINITIONS_DIR>
 ```
-and rebuild to have `build.rs` compile the `.proto` file using [prost](https://github.com/tokio-rs/prost)
+to generate `neko.proto`, and then run
+```bash
+cargo run -p tools compile
+```
+to create the relevant Rust source file. Before this step was included in the build script but `protoc` has proven to be difficult to wrangle for automatic builds.
 
 ## Some Known Issues
  - Sufficiently old manga on MangaDex in particular still have numerical IDs coming from Tachi forks instead of UUIDs, which messes with Kotatsu's identification procedure
