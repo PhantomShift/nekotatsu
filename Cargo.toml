@@ -1,3 +1,4 @@
+workspace = { members = ["tools"] }
 [package]
 name = "nekotatsu"
 version = "1.0.0"
