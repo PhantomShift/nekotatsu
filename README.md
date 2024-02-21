@@ -39,4 +39,9 @@ to create the relevant Rust source file. Before this step was included in the bu
  - Some Kotatsu parsers need additional work to be supported; I've only done enough to handle some of them properly
  - Kotatsu to Neko sucks
 
+## Links/Credits
+ - Neko - https://github.com/CarlosEsco/Neko
+ - Kotatsu - https://github.com/KotatsuApp/Kotatsu
+ - Keiyoushi (extensions list) - https://github.com/keiyoushi/extensions
+
 Although there is the possibility of me not using Kotatsu much despite making this tool, please feel free to contact me if any breaking changes to either Neko or Kotatsu causes this tool to stop functioning. Happy reading!
