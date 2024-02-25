@@ -4,6 +4,8 @@ use flate2::{write::GzEncoder, Compression};
 use once_cell::sync::OnceCell;
 use prost::Message;
 use clap::{Parser, Subcommand};
+use directories::ProjectDirs;
+use lazy_static::lazy_static;
 
 pub mod extensions;
 pub mod nekotatsu {
@@ -16,8 +18,11 @@ use kotatsu::*;
 
 use crate::extensions::get_source;
 
-pub static TACHI_SOURCE_PATH: OnceCell<String> = OnceCell::new();
-pub static KOTATSU_PARSE_PATH: OnceCell<String> = OnceCell::new();
+lazy_static!{
+    static ref PROJECT_DIR: ProjectDirs = ProjectDirs::from("", "", "Nekotatsu").expect("Invalid application directories generated");
+    static ref TACHI_SOURCE_PATH: PathBuf = PathBuf::from(PROJECT_DIR.data_dir()).join("tachi_sources.json");
+    static ref KOTATSU_PARSE_PATH: PathBuf = PathBuf::from(PROJECT_DIR.data_dir()).join("kotatsu_parsers.json");
+}
 
 /// Simple CLI tool that converts Neko backups into Kotatsu backups
 #[derive(Debug, Parser)]
@@ -38,14 +43,6 @@ enum Commands {
         #[arg(short, long)]
         output: Option<String>,
 
-        /// Path to Tachiyomi source information (minified) json
-        #[arg(short, long, default_value_t = String::from("tachi_sources.json"))]
-        tachi_path: String,
-
-        /// Path to Kotatsu parsers information 
-        #[arg(short, long, next_line_help = true, default_value_t = String::from("kotatsu_parsers.json"))]
-        kotatsu_path: String,
-
         /// Display some additional information
         #[arg(short, long)]
         verbose: bool,
@@ -56,7 +53,7 @@ enum Commands {
     },
 
     /// Downloads latest Tachiyomi source information and
-    /// updates Kotatsu parser list. The resulting files are saved in the directory as `tachi_sources.json` and `kotatsu_parsers.json`.
+    /// updates Kotatsu parser list. The resulting files are saved in the app's data directory as `tachi_sources.json` and `kotatsu_parsers.json`.
     Update {
         /// Download URL for Kotatsu parsers repo.
         #[arg(short, long, default_value_t = String::from("https://github.com/KotatsuApp/kotatsu-parsers/archive/refs/heads/master.zip"))]
@@ -70,6 +67,12 @@ enum Commands {
         #[arg(short, long)]
         force_download: bool,
     },
+
+    /// Deletes any files downloaded by nekotatsu (the data directory);
+    /// Effectively the same as running `rm -rf ~/.local/share/nekotatsu` on Linux.
+    Clear,
+    /// Alias for `clear`
+    Delete
 }
 
 fn manga_get_source_name(manga: &nekotatsu::neko::BackupManga) -> String {
@@ -87,7 +90,7 @@ fn manga_get_source_name(manga: &nekotatsu::neko::BackupManga) -> String {
             let mut lock = sources.lock().unwrap();
             let source = lock.entry(manga.source).or_insert_with(|| {
                 let parser_list = KOTATSU_PARSER_LIST.get_or_try_init(|| {
-                    let list = std::fs::read_to_string(KOTATSU_PARSE_PATH.get().ok_or(io::Error::new(io::ErrorKind::NotFound, "Kotatsu path not initialized"))?)?;
+                    let list = std::fs::read_to_string(KOTATSU_PARSE_PATH.as_path())?;
                     let r: Result<Vec<KotatsuParser>, serde_json::error::Error> = serde_json::from_str(&list);
                     r.map_err(|_e| {
                         io::Error::new(io::ErrorKind::InvalidData, "Error reading Kotatsu parser list")
@@ -394,12 +397,16 @@ fn main() -> std::io::Result<()> {
 
     match args.command {
         Commands::Update { kotatsu_link, tachi_link , force_download} => {
-
-            if force_download || !std::path::Path::new("tachi_sources.json").exists() {
+            let data_path = PathBuf::from(PROJECT_DIR.data_dir());
+            if !data_path.try_exists()? {
+                std::fs::create_dir_all(&data_path)?;
+            }
+            let tachi_path = data_path.join("tachi_sources.json");
+            if force_download || !tachi_path.try_exists()? {
                 let response = reqwest::blocking::get(tachi_link);
                 if let Ok(response) = response {
                     let text = response.text().unwrap();
-                    std::fs::write("tachi_sources.json", text)?;
+                    std::fs::write(tachi_path.as_path(), text)?;
                     println!("Successfully updated extension info.");
                 } else {
                     println!("Failed to download source info.");
@@ -407,28 +414,27 @@ fn main() -> std::io::Result<()> {
                 }
             }
 
-            if force_download || !std::path::Path::new("kotatsu-parsers.zip").exists() {
+            let kotatsu_path = data_path.join("kotatsu-parsers.zip");
+            if force_download || !kotatsu_path.try_exists()? {
                 let response = reqwest::blocking::get(kotatsu_link);
                 if let Ok(mut response) = response {
                     let mut buf = Vec::new();
                     let _ = response.copy_to(&mut buf);
-                    std::fs::write("kotatsu-parsers.zip", buf)?;
-                    println!("Successfully updated extension info.");
+                    std::fs::write(kotatsu_path.as_path(), buf)?;
+                    println!("Successfully downloaded parser repo.");
                 } else {
-                    println!("Failed to download parser info.");
+                    println!("Failed to download parser repo.");
                     return Ok(());
                 }
             }
     
-            kotatsu::update_parsers("kotatsu-parsers.zip")?;
+            kotatsu::update_parsers(kotatsu_path.as_path())?;
             println!("Successfully updated parser info.");
 
             Ok(())
         }
 
-        Commands::Convert { input, output, kotatsu_path, tachi_path, verbose, reverse } => {
-            let _ = TACHI_SOURCE_PATH.set(tachi_path);
-            let _ = KOTATSU_PARSE_PATH.set(kotatsu_path);
+        Commands::Convert { input, output, verbose, reverse } => {
 
             let input_path = input;
             let output_path = output.unwrap_or(if reverse {
@@ -461,5 +467,23 @@ fn main() -> std::io::Result<()> {
                 neko_to_kotatsu(input_path, output_path, verbose)
             }
         },
+
+        Commands::Clear | Commands::Delete => {
+            let path = PROJECT_DIR.data_dir();
+
+            if path.try_exists()? {
+                std::fs::remove_dir_all(path)?;
+                
+                if cfg!(target_os = "windows") {
+                    println!("Deleted folder `{}`", path.to_string_lossy());
+                } else {
+                    println!("Deleted directory `{}`", path.to_string_lossy());
+                }
+            } else {
+                println!("Data does not exist/is already deleted.")
+            }
+
+            Ok(())
+        }
     }
 }

@@ -1,4 +1,4 @@
-use std::io::Error;
+use std::{io::Error, path::PathBuf};
 use serde::Deserialize;
 use once_cell::sync::OnceCell;
 
@@ -40,11 +40,12 @@ pub struct ExtensionInfo {
 pub fn get_source(id: i64) -> std::io::Result<SourceInfo> {
     let id = id.to_string();
     let extensions = EXTENSION_LIST.get_or_try_init(|| {
-        let tachi_source_path = crate::TACHI_SOURCE_PATH.get().ok_or(Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "Tachiyomi source path not initialized"
-        ))?;
-        let extensions = std::fs::read_to_string(tachi_source_path)
+        let path = crate::PROJECT_DIR.data_dir();
+        if !path.try_exists()? {
+            std::fs::create_dir_all(path)?;
+        }
+        let tachi_path = PathBuf::from(path).join("tachi_sources.json");
+        let extensions = std::fs::read_to_string(tachi_path)
         .map_err(|_e| {
             Error::new(
                 std::io::ErrorKind::NotFound,

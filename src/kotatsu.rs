@@ -1,4 +1,4 @@
-use std::io::{Cursor, Read};
+use std::{io::{Cursor, Read}, path::Path};
 
 use serde::{Serialize, Deserialize};
 use zip::ZipArchive;
@@ -150,7 +150,7 @@ fn get_parser_definitions(archive: ZipArchive<Cursor<Vec<u8>>>) -> std::io::Resu
     Ok(files)
 }
 
-pub fn update_parsers(path: &str) -> std::io::Result<()> {
+pub fn update_parsers(path: &Path) -> std::io::Result<()> {
     let bytes = Cursor::new(std::fs::File::open(path)?.bytes().collect::<Result<Vec<u8>, std::io::Error>>()?);
     let reader = zip::read::ZipArchive::new(bytes)?;
     let files = get_parser_definitions(reader)?;
@@ -193,7 +193,7 @@ pub fn update_parsers(path: &str) -> std::io::Result<()> {
     }
     // let to_store = serde_json::to_string_pretty(&parsers)?;
     let to_store = serde_json::to_string(&parsers)?;
-    std::fs::write("kotatsu_parsers.json", &to_store)?;
+    std::fs::write(crate::KOTATSU_PARSE_PATH.as_path(), &to_store)?;
 
     Ok(())
 }
