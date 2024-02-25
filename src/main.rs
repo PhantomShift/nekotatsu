@@ -53,7 +53,9 @@ enum Commands {
     },
 
     /// Downloads latest Tachiyomi source information and
-    /// updates Kotatsu parser list. The resulting files are saved in the app's data directory as `tachi_sources.json` and `kotatsu_parsers.json`.
+    /// updates Kotatsu parser list. The resulting files are saved in the app's data directory
+    /// (`~/.local/share/nekotatsu` on Linux and `%APPDATA%\Nekotatsu\data` on Windows)
+    /// as `tachi_sources.json` and `kotatsu_parsers.json`.
     Update {
         /// Download URL for Kotatsu parsers repo.
         #[arg(short, long, default_value_t = String::from("https://github.com/KotatsuApp/kotatsu-parsers/archive/refs/heads/master.zip"))]
@@ -69,7 +71,7 @@ enum Commands {
     },
 
     /// Deletes any files downloaded by nekotatsu (the data directory);
-    /// Effectively the same as running `rm -rf ~/.local/share/nekotatsu` on Linux.
+    /// Effectively the same as running `rm -rf ~/.local/share/nekotatsu` on Linux and `rmdir /s /q %APPDATA%\Nekotatsu` on Windows.
     Clear,
     /// Alias for `clear`
     Delete
@@ -469,20 +471,19 @@ fn main() -> std::io::Result<()> {
         },
 
         Commands::Clear | Commands::Delete => {
+            
+            #[cfg(not(target_os = "windows"))]
             let path = PROJECT_DIR.data_dir();
+            #[cfg(target_os = "windows")]
+            let path = PROJECT_DIR.data_dir().parent()
+                .ok_or(std::io::Error::new(io::ErrorKind::Other, "Unable to get Nekotatsu data folder path"))?;
 
             if path.try_exists()? {
                 std::fs::remove_dir_all(path)?;
-                
-                if cfg!(target_os = "windows") {
-                    println!("Deleted folder `{}`", path.to_string_lossy());
-                } else {
-                    println!("Deleted directory `{}`", path.to_string_lossy());
-                }
+                println!("Deleted directory `{}`", path.display());
             } else {
                 println!("Data does not exist/is already deleted.")
             }
-
             Ok(())
         }
     }
