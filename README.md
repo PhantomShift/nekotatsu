@@ -7,11 +7,13 @@ Before doing anything, select a folder that you will be doing all of this work i
 ```bash
 nekotatsu update
 ```
-to automatically download and generate all the necessary files. Now you can run,
+to automatically download and generate all the necessary files. These files will be in a relevant data directory (`.local/share/nekotatsu` on Linux and `%APPDATA%\Nekotatsu\data` on Windows (sorry mac users I don't have a mac to test on)). Now you can run,
 ```bash
 nekotatsu convert <path_to_backup>
 ```
 to turn your backup into a zip file that Kotatsu can parse. Get this zip file on the relevant device and select Settings > Data and privacy > Restore from backup and select the zip file.
+
+If you don't plan on using the tool again any time soon, make sure to run `nekotatsu clear` to remove any files nekotatsu downloaded/generated from `nekotatsu update`.
 
 Run the commands with `--help` to view additional options.
 
