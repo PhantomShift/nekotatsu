@@ -7,12 +7,15 @@ use clap::{Parser, Subcommand};
 use directories::ProjectDirs;
 use lazy_static::lazy_static;
 
+use iced::Application;
+
 pub mod extensions;
 pub mod nekotatsu {
     pub mod neko {
         include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/neko.backup.rs"));
     }
 }
+pub mod gui;
 pub mod kotatsu;
 use kotatsu::*;
 
@@ -29,7 +32,7 @@ lazy_static!{
 #[command(version, about, long_about = None)]
 struct Args {
     #[command(subcommand)]
-    command: Commands
+    command: Option<Commands>
 }
 
 #[derive(Debug, Subcommand)]
@@ -50,6 +53,13 @@ enum Commands {
         /// Convert to Neko instead
         #[arg(short, long)]
         reverse: bool,
+
+        /// Convert without asking about overwriting existing files
+        #[arg(short, long)]
+        force: bool,
+
+        #[arg(long, hide=true, default_value_t=true)]
+        print_output: bool
     },
 
     /// Downloads latest Tachiyomi source information and
@@ -75,6 +85,11 @@ enum Commands {
     Clear,
     /// Alias for `clear`
     Delete
+}
+
+enum CommandResult {
+    None,
+    Success(String, String)
 }
 
 fn manga_get_source_name(manga: &nekotatsu::neko::BackupManga) -> String {
@@ -160,7 +175,14 @@ fn decode_gzip_backup(path: &str) -> std::io::Result<Vec<u8>> {
     return Ok(buf)
 }
 
-fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool) -> std::io::Result<()> {
+fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, print_output: bool) -> std::io::Result<CommandResult> {
+    let mut my_vec = Vec::new();
+    let mut buffer: Box<dyn Write> = if print_output {
+        Box::new(std::io::stdout())
+    } else {
+        Box::new(&mut my_vec)
+    };
+
     let neko_read = decode_gzip_backup(&input_path)
         .or_else(|e| {
             Err(match e.kind() {
@@ -202,7 +224,7 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool) -> s
         if kotatsu_manga.source == "UNKNOWN" {
             let source = get_source(manga.source)?;
             if verbose {
-                println!("[WARNING] Unable to convert {} from source {} ({})", manga.title, source.name, source.baseUrl );
+                buffer.write_fmt(format_args!("[WARNING] Unable to convert {} from source {} ({})\n", manga.title, source.name, source.baseUrl))?;
             }
             errored_manga += 1;
             errored_sources.insert(source.name, source.baseUrl);
@@ -290,26 +312,37 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool) -> s
                 writer.write_all(json.as_bytes())?;
             }
             #[allow(unreachable_patterns)]
-            Ok(_) => println!("{name} is empty, ommitted from converted backup"),
+            Ok(_) => {
+                buffer.write_fmt(format_args!("{name} is empty, ommitted from converted backup\n"))?;
+            },
             Err(e) => {
-                println!("Warning: Error occured processing {name}, ommitted from converted backup");
-                println!("Original error: {e}");
+                buffer.write_fmt(format_args!("Warning: Error occured processing {name}, ommitted from converted backup\n"))?;
+                buffer.write_fmt(format_args!("Original error: {e}\n"))?;
             }
         }
     }
     writer.finish()?;
 
     if errored_manga > 0 {
-        println!("{errored_manga} of {total_manga} manga and {} sources failed to convert.", errored_sources.iter().count());
+        buffer.write_fmt(format_args!("{errored_manga} of {total_manga} manga and {} sources failed to convert.\n", errored_sources.iter().count()))?;
         if !verbose {
-            println!("Try running again with verbose (-v) on for details");
+            buffer.write_fmt(format_args!("Try running again with verbose (-v) on for details\n"))?;
         }
-        println!("Conversion completed with errors, output: {}", output_path.display());
+        buffer.write_fmt(format_args!("Conversion completed with errors, output: {}\n", output_path.display()))?;
     } else {
-        println!("{total_manga} manga successfully converted, output: {}", output_path.display());
+        buffer.write_fmt(format_args!("{total_manga} manga successfully converted, output: {}\n", output_path.display()))?;
     }
 
-    Ok(())
+    drop(buffer);
+    
+    Ok(CommandResult::Success(
+        output_path.display().to_string(),
+        if print_output {
+            String::new()
+        } else {
+            my_vec.into_iter().map(|c| c as char).collect::<String>()
+        }
+    ))
 }
 
 fn kotatsu_to_neko_manga(k: &KotatsuMangaBackup) -> nekotatsu::neko::BackupManga {
@@ -332,7 +365,7 @@ fn kotatsu_to_neko_manga(k: &KotatsuMangaBackup) -> nekotatsu::neko::BackupManga
     }
 }
 
-fn kotatsu_to_neko(input_path: String, output_path: PathBuf) -> std::io::Result<()> {
+fn kotatsu_to_neko(input_path: String, output_path: PathBuf) -> std::io::Result<CommandResult> {
     // I would at the very least like to be able to get the latest chapter and the bookmarks
     // but the process of getting the URL from the ID is not reasonably reversible as far as I can see
     println!("Note: limited support. Chapter information (including history and bookmarks) cannot be converted from Kotatsu backups.");
@@ -396,13 +429,11 @@ fn kotatsu_to_neko(input_path: String, output_path: PathBuf) -> std::io::Result<
 
     println!("Conversion completed successfully, output: {}", output_path.display());
 
-    Ok(())
+    Ok(CommandResult::Success(output_path.display().to_string(), String::new()))
 }
 
-fn main() -> std::io::Result<()> {
-    let args = Args::parse();
-
-    match args.command {
+fn run_command(command: Commands) -> std::io::Result<CommandResult> {
+    match command {
         Commands::Update { kotatsu_link, tachi_link , force_download} => {
             let data_path = PathBuf::from(PROJECT_DIR.data_dir());
             if !data_path.try_exists()? {
@@ -417,7 +448,7 @@ fn main() -> std::io::Result<()> {
                     println!("Successfully updated extension info.");
                 } else {
                     println!("Failed to download source info.");
-                    return Ok(());
+                    return Ok(CommandResult::None);
                 }
             }
 
@@ -431,17 +462,17 @@ fn main() -> std::io::Result<()> {
                     println!("Successfully downloaded parser repo.");
                 } else {
                     println!("Failed to download parser repo.");
-                    return Ok(());
+                    return Ok(CommandResult::None);
                 }
             }
     
             kotatsu::update_parsers(kotatsu_path.as_path())?;
             println!("Successfully updated parser info.");
 
-            Ok(())
+            Ok(CommandResult::None)
         }
 
-        Commands::Convert { input, output, verbose, reverse } => {
+        Commands::Convert { input, output, verbose, reverse, force, print_output } => {
 
             let input_path = input;
             let output_path = output.unwrap_or(if reverse {
@@ -454,7 +485,7 @@ fn main() -> std::io::Result<()> {
             } else {
                 "zip"
             });
-            if output_path.exists() {
+            if !force && output_path.exists() {
                 print!("File with name {} already exists; overwrite? Y(es)/N(o): ", output_path.display());
                 io::stdout().flush()?;
                 let mut buf = String::new();
@@ -463,7 +494,7 @@ fn main() -> std::io::Result<()> {
                     "y" | "yes" => (),
                     _ => {
                         println!("Conversion cancelled");
-                        return Ok(());
+                        return Ok(CommandResult::None);
                     }
                 }
             }
@@ -471,7 +502,7 @@ fn main() -> std::io::Result<()> {
             if reverse {
                 kotatsu_to_neko(input_path, output_path)
             } else {
-                neko_to_kotatsu(input_path, output_path, verbose)
+                neko_to_kotatsu(input_path, output_path, verbose, print_output)
             }
         },
 
@@ -489,7 +520,19 @@ fn main() -> std::io::Result<()> {
             } else {
                 println!("Data does not exist/is already deleted.")
             }
-            Ok(())
+            Ok(CommandResult::None)
         }
     }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args = Args::parse();
+
+    if let Some(command) = args.command {
+        run_command(command)?;
+    } else {
+        gui::Nekotatsu::run(iced::settings::Settings::default())?;
+    }
+
+    Ok(())
 }
