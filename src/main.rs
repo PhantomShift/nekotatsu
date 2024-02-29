@@ -7,17 +7,19 @@ use clap::{Parser, Subcommand};
 use directories::ProjectDirs;
 use lazy_static::lazy_static;
 
-use iced::Application;
-
 pub mod extensions;
 pub mod nekotatsu {
     pub mod neko {
         include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/neko.backup.rs"));
     }
 }
-pub mod gui;
 pub mod kotatsu;
 use kotatsu::*;
+
+#[cfg(feature="gui")]
+pub mod gui;
+#[cfg(feature="gui")]
+use iced::Application;
 
 use crate::extensions::get_source;
 
@@ -631,11 +633,20 @@ fn run_command(command: Commands) -> std::io::Result<CommandResult> {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
-    if let Some(command) = args.command {
-        run_command(command)?;
-    } else {
-        gui::Nekotatsu::run(iced::settings::Settings::default())?;
+    match args.command {
+        Some(command) => {
+            run_command(command)?;
+        }
+        #[cfg(not(feature="gui"))]
+        None => {
+            println!("Simple CLI tool that converts Neko backups into Kotatsu backups");
+            println!("Run with -h for usage");
+        }
+        #[cfg(feature="gui")]
+        None => {
+            gui::Nekotatsu::run(iced::settings::Settings::default())?;
+        }
     }
-
+    
     Ok(())
 }
