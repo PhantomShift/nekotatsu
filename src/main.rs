@@ -238,7 +238,11 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool) -> s
                 scroll: 0,
                 image_url: kotatsu_manga.cover_url.clone(),
                 created_at: 0,
-                percent: chapter.last_page_read as f32 / (chapter.last_page_read as f32 + chapter.pages_left as f32),
+                percent: if chapter.last_page_read + chapter.pages_left == 0 { 
+                    0.0
+                } else {
+                    chapter.last_page_read as f32 / (chapter.last_page_read as f32 + chapter.pages_left as f32)
+                },
             })
         }).collect::<Vec<_>>();
         if bookmarks.len() > 0 {
