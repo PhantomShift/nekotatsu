@@ -1,0 +1,60 @@
+name: Failing Conversion
+description: Template for instances where a source fails to be converted
+title: '[Failing Conversion]: '
+labels:
+  - bug
+body:
+  - type: checkboxes
+    id: preface
+    attributes:
+      label: Preface
+      description: Please ensure the following
+      options:
+        - label: >-
+            I have checked that the source is implemented in the [Kotatsu
+            parsers repo](https://github.com/KotatsuApp/kotatsu-parsers)
+          required: true
+        - label: >-
+            I have tried force updating the sources (`nekotatsu update
+            --force-download`)
+          required: true
+        - label: >-
+            (OPTIONAL) The source is listed by
+            [Keiyoushi](https://keiyoushi.github.io/extensions/)
+          required: false
+  - type: input
+    id: source-name
+    attributes:
+      label: Source Name
+      description: Name of the source
+      placeholder: i.e. MangaDex
+    validations:
+      required: true
+  - type: input
+    id: kotatsu-link
+    attributes:
+      label: Kotatsu Link
+      description: Link to the file where the parser is implemented in Kotatsu
+      placeholder: >-
+        i.e.
+        https://github.com/KotatsuApp/kotatsu-parsers/blob/master/src/main/kotlin/org/koitharu/kotatsu/parsers/site/all/MangaDexParser.kt
+    validations:
+      required: true
+  - type: input
+    id: extension-link
+    attributes:
+      label: Extension Implementation
+      description: >-
+        If an extension exists for this source but is not included in the
+        [Keiyoushi repo](https://github.com/keiyoushi/extensions), please
+        provide a link to it
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any additional context that may be helpful for the issue
+  - type: markdown
+    attributes:
+      value: >-
+        This template was generated with [Issue Forms
+        Creator](https://issue-forms-creator.netlify.app)
