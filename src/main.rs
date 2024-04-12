@@ -19,7 +19,7 @@ use kotatsu::*;
 #[cfg(feature="gui")]
 pub mod gui;
 #[cfg(feature="gui")]
-use iced::Application;
+pub mod child_window;
 
 use crate::extensions::get_source;
 
@@ -644,7 +644,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         #[cfg(feature="gui")]
         None => {
-            gui::Nekotatsu::run(iced::settings::Settings::default())?;
+            gui::run_application()?;
         }
     }
     
