@@ -1,8 +1,10 @@
-use slint::{self, ComponentHandle};
+use slint;
 use tokio;
 use rfd;
 
-use crate::child_window;
+use nekotatsu::{Commands, CommandResult};
+
+pub mod child_window;
 
 slint::slint!{
 import { VerticalBox, Button, LineEdit, CheckBox, TextEdit } from "std-widgets.slint";
@@ -74,7 +76,7 @@ export component Application inherits Window {
 }
 }
 
-pub fn run_application() -> Result<(), Box::<dyn std::error::Error>> {
+fn main() -> Result<(), Box::<dyn std::error::Error>> {
     let runtime = tokio::runtime::Runtime::new()?;
 
     runtime.block_on(async {
@@ -96,7 +98,7 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
         let print_output = !app.get_view_output();
         let cc_handle = app.as_weak();
         tokio::spawn(async move {
-            let result = crate::run_command(crate::Commands::Convert {
+            let result = nekotatsu::run_command(Commands::Convert {
                 input,
                 output,
                 favorites_name: String::from("Library"),
@@ -175,7 +177,7 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
         });
     });
     app.on_update_clicked(|| {
-        let _ = crate::run_command(crate::Commands::Update {
+        let _ = nekotatsu::run_command(Commands::Update {
             kotatsu_link: String::from("https://github.com/KotatsuApp/kotatsu-parsers/archive/refs/heads/master.zip"),
             tachi_link: String::from("https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"),
             force_download: false
