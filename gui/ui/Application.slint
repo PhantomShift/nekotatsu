@@ -1,0 +1,67 @@
+import { VerticalBox, Button, LineEdit, CheckBox, TextEdit } from "std-widgets.slint";
+
+component FileButton inherits Button {
+    text: "🗂️";
+    max-height: 30px;
+    max-width: 30px;
+}
+
+export component Application inherits Window {
+    title: "nekotatsu";
+
+    callback update-clicked();
+    callback convert-clicked();
+    callback input-clicked();
+    callback output-clicked();
+
+    in-out property <string> popup-text;
+    in-out property <string> in-path;
+    in-out property <string> out-path;
+
+    out property <bool> view-output: true;
+    out property <bool> verbose-output: false;
+
+    VerticalLayout {
+        Button {
+            text: "Update Sources and Parsers";
+            clicked => { update-clicked() }
+        }
+        HorizontalLayout {
+            FileButton {
+                clicked => { input-clicked() }
+            }
+            input-path := LineEdit {
+                placeholder-text: "/path/to/input";
+                text: in-path;
+                edited => { in-path = self.text }
+            }
+        }
+        HorizontalLayout {
+            FileButton {
+                clicked => { output-clicked() }
+            }
+            output-path := LineEdit {
+                placeholder-text: "/path/to/output";
+                text: out-path;
+                edited => { out-path = self.text }
+            }
+        }
+        Button {
+            text: "Convert";
+            clicked => {
+                convert-clicked()
+            }
+        }
+        CheckBox {
+            checked: view-output;
+            toggled => { view-output = self.checked }
+            text: "View Output";
+        }
+        CheckBox {
+            enabled: view-output;
+            checked: verbose-output;
+            toggled => { verbose-output = self.checked }
+            text: "Verbose Output";
+        }
+    }
+}
