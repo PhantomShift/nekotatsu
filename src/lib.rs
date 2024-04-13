@@ -111,6 +111,20 @@ pub enum CommandResult {
     Success(String, String)
 }
 
+pub enum Buffer {
+    Stdout(std::io::Stdout),
+    Vector(Vec<u8>)
+}
+
+impl Buffer {
+    fn write_fmt(&mut self, args: std::fmt::Arguments) -> Result<(), std::io::Error> {
+        match self {
+            Self::Stdout(stdout) => stdout.write_fmt(args),
+            Self::Vector(ref mut v) => v.write_fmt(args)
+        }
+    }
+}
+
 fn manga_get_source_name(manga: &nekotatsu::neko::BackupManga, soft_match: bool) -> String {
     static SOURCES: OnceCell<Mutex<HashMap<i64, String>>> = OnceCell::new();
     static KOTATSU_PARSER_LIST: OnceCell<Vec<KotatsuParser>> = OnceCell::new();
@@ -212,11 +226,10 @@ fn decode_gzip_backup(path: &str) -> std::io::Result<Vec<u8>> {
 }
 
 fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favorites_name: String, soft_match: bool, print_output: bool) -> std::io::Result<CommandResult> {
-    let mut my_vec = Vec::new();
-    let mut buffer: Box<dyn Write> = if print_output {
-        Box::new(std::io::stdout())
+    let mut buffer = if print_output {
+        Buffer::Stdout(std::io::stdout())
     } else {
-        Box::new(&mut my_vec)
+        Buffer::Vector(Vec::new())
     };
 
     let neko_read = decode_gzip_backup(&input_path)
@@ -416,17 +429,14 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favo
         buffer.write_fmt(format_args!("{total_manga} manga successfully converted, output: {}\n", output_path.display()))?;
     }
     if soft_match {
-        println!("[IMPORTANT] Command run with 'soft match' on; some sources may not behave as intended")
+        buffer.write_fmt(format_args!("[IMPORTANT] Command run with 'soft match' on; some sources may not behave as intended"))?;
     }
 
-    drop(buffer);
-    
     Ok(CommandResult::Success(
         output_path.display().to_string(),
-        if print_output {
-            String::new()
-        } else {
-            my_vec.into_iter().map(|c| c as char).collect::<String>()
+        match buffer {
+            Buffer::Vector(v) => v.into_iter().map(|c| c as char).collect::<String>(),
+            Buffer::Stdout(_) => String::new()
         }
     ))
 }
