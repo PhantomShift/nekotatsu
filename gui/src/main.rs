@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 use slint::{self, ComponentHandle};
 use tokio;
 use rfd;
