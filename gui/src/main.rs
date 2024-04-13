@@ -34,6 +34,7 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
         let verbose = app.get_verbose_output();
         let print_output = !app.get_view_output();
         let cc_handle = app.as_weak();
+        app.set_processing(true);
         tokio::spawn(async move {
             let result = nekotatsu::run_command(Commands::Convert {
                 input,
@@ -45,9 +46,8 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
                 force: true,
                 print_output
             });
-
-            slint::invoke_from_event_loop(move|| {
-                let app = cc_handle.unwrap();
+            cc_handle.upgrade_in_event_loop(move |app| {
+                app.set_processing(false);
                 match child_window::ChildWindow::new() {
                     Ok(child) => {
                         match result {
@@ -113,11 +113,19 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
             }
         });
     });
-    app.on_update_clicked(|| {
-        let _ = nekotatsu::run_command(Commands::Update {
-            kotatsu_link: String::from("https://github.com/KotatsuApp/kotatsu-parsers/archive/refs/heads/master.zip"),
-            tachi_link: String::from("https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"),
-            force_download: false
+
+    let uc_handle = app.as_weak();
+    app.on_update_clicked(move || {
+        let app = uc_handle.unwrap();
+        let uc_handle = app.as_weak();
+        app.set_processing(true);
+        tokio::spawn(async move {
+            let _ = nekotatsu::run_command(Commands::Update {
+                kotatsu_link: String::from("https://github.com/KotatsuApp/kotatsu-parsers/archive/refs/heads/master.zip"),
+                tachi_link: String::from("https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"),
+                force_download: false
+            });
+            uc_handle.upgrade_in_event_loop(|app| app.set_processing(false)).unwrap();
         });
     });
     

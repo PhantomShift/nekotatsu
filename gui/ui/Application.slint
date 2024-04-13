@@ -18,6 +18,7 @@ export component Application inherits Window {
     in-out property <string> popup-text;
     in-out property <string> in-path;
     in-out property <string> out-path;
+    in-out property <bool> processing;
 
     out property <bool> view-output: true;
     out property <bool> verbose-output: false;
@@ -25,6 +26,7 @@ export component Application inherits Window {
     VerticalLayout {
         Button {
             text: "Update Sources and Parsers";
+            enabled: !processing;
             clicked => { update-clicked() }
         }
         HorizontalLayout {
@@ -49,6 +51,7 @@ export component Application inherits Window {
         }
         Button {
             text: "Convert";
+            enabled: !processing;
             clicked => {
                 convert-clicked()
             }
