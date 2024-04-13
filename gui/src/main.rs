@@ -69,6 +69,7 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
                             let child = cc_handle.unwrap();
                             child.hide().unwrap();
                         });
+                        child.window().set_position(app.window().position());
                         child.show().unwrap();
                     },
                     Err(e) => {
