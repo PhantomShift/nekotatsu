@@ -22,11 +22,11 @@ jobs:
             name: nekotatsu-${{github.ref_name}}-Windows-x86_64.zip
             command: both
 
-          - release_for: macOS-x86_64
+          - release_for: macOS-aarch64
             os: macOS-latest
-            target: x86_64-apple-darwin
+            target: aarch64-apple-darwin
             bin: nekotatsu
-            name: nekotatsu-${{github.ref_name}}-Darwin-x86_64.tar.gz
+            name: nekotatsu-${{github.ref_name}}-Darwin-aarch64.tar.gz
             command: both
 
     runs-on: ${{ matrix.platform.os }}
