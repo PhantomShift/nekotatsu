@@ -103,6 +103,25 @@ pub struct KotatsuParser {
     pub domains: Vec<String>
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct KotatsuIndexEntry {
+    pub app_id: String,
+    pub app_version: u64,
+    pub created_at: u128
+}
+
+impl KotatsuIndexEntry {
+    pub fn generate() -> Self {
+        Self {
+            app_id: String::from("com.github.phantomshift.nekotatsu"), 
+            app_version: 0,
+            created_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap().as_millis()
+        }
+    }
+}
+
 pub fn get_kotatsu_id(source_name: &str, url: &str) -> i64 {
     let mut id: i64 = 1125899906842597;
     source_name.chars().for_each(|c| id = (31i64.overflowing_mul(id)).0.overflowing_add(c as i64).0);

@@ -282,6 +282,7 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool) -> s
         ("categories", serde_json::to_string_pretty(&result_categories)),
         ("favourites", serde_json::to_string_pretty(&result_favourites)),
         ("bookmarks", serde_json::to_string_pretty(&result_bookmarks)),
+        ("index", serde_json::to_string_pretty(&[kotatsu::KotatsuIndexEntry::generate()]))
     ] {
         match entry {
             Ok(json) => if json.trim_end() != "[]" {
