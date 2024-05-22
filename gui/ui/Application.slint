@@ -23,10 +23,11 @@ export component Application inherits Window {
     out property <bool> view-output: true;
     out property <bool> verbose-output: false;
 
-    VerticalLayout {
+    VerticalBox {
         Button {
             text: "Update Sources and Parsers";
             enabled: !processing;
+            max-height: self.min-height;
             clicked => { update-clicked() }
         }
         HorizontalLayout {
@@ -52,6 +53,7 @@ export component Application inherits Window {
         Button {
             text: "Convert";
             enabled: !processing && in-path != "" && out-path != "";
+            max-height: self.min-height;
             clicked => {
                 convert-clicked()
             }
@@ -67,5 +69,6 @@ export component Application inherits Window {
             toggled => { verbose-output = self.checked }
             text: "Verbose Output";
         }
+        Rectangle {}
     }
 }
