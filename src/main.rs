@@ -210,12 +210,16 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool) -> s
         let kotatsu_manga = manga_to_kotatsu(&manga)?;
 
         if kotatsu_manga.source == "UNKNOWN" {
-            let source = get_source(manga.source)?;
-            if verbose {
-                println!("[WARNING] Unable to convert {} from source {} ({})", manga.title, source.name, source.baseUrl );
+            let source = get_source(manga.source);
+            if let Ok(source) = source {
+                if verbose {
+                    println!("[WARNING] Unable to convert '{}' from source {} ({}), Kotatsu parser not found", manga.title, source.name, source.baseUrl);
+                }
+                errored_sources.insert(source.name, source.baseUrl);
+            } else if verbose {
+                println!("[WARNING] Unable to convert '{}', unknown Tachiyomi source (ID {})", manga.title, manga.source)
             }
             errored_manga += 1;
-            errored_sources.insert(source.name, source.baseUrl);
             continue;
         }
 
