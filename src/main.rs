@@ -197,6 +197,16 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool) -> s
 
     for manga in backup.backup_manga.iter() {
         total_manga += 1;
+
+        // ignore locally imported manga
+        if manga.source == 0 {
+            if verbose {
+                println!("[WARNING] Unable to convert '{}', local manga currently unsupported", manga.title);
+            }
+            errored_manga += 1;
+            continue;
+        }
+
         let kotatsu_manga = manga_to_kotatsu(&manga)?;
 
         if kotatsu_manga.source == "UNKNOWN" {
