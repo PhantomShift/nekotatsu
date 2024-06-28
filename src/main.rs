@@ -313,6 +313,11 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool) -> s
         println!("{errored_manga} of {total_manga} manga and {} sources failed to convert.", errored_sources.iter().count());
         if !verbose {
             println!("Try running again with verbose (-v) on for details");
+        } else {
+            println!("Sources that errorred:");
+            for (name, url) in errored_sources.iter() {
+                println!("{name} ({url})");
+            }
         }
         println!("Conversion completed with errors, output: {}", output_path.display());
     } else {
