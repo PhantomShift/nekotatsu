@@ -3,11 +3,15 @@ Simple CLI tool that converts (specifically for) [Neko](https://github.com/Carlo
 
 ## Instructions
 Note that **before you can use nekotatsu for converting**, updated lists of Tachiyomi extensions and Kotatsu parsers are necessary to map from one to the other.
-Before doing anything, select a folder that you will be doing all of this work in. Once in that folder, run,
+Before attempting to do any converting, run the following command
 ```bash
 nekotatsu update
 ```
-to automatically download and generate all the necessary files. These files will be in a relevant data directory (`.local/share/nekotatsu` on Linux and `%APPDATA%\Nekotatsu\data` on Windows (sorry mac users I don't have a mac to test on)). Now you can run,
+to automatically download and generate all the necessary files. Note that this command downloads from the Keiyoshi repository by default; if you used a different source with your backup, make sure to override it with this command
+```
+nekotatsu update -t <rest of the link>.index.min.json
+```
+ These files will be in a relevant data directory (`.local/share/nekotatsu` on Linux and `%APPDATA%\Nekotatsu\data` on Windows (sorry mac users I don't have a mac to test on)). Now you can run,
 ```bash
 nekotatsu convert <path_to_backup>
 ```
@@ -15,7 +19,45 @@ to turn your backup into a zip file that Kotatsu can parse. Get this zip file on
 
 If you don't plan on using the tool again any time soon, make sure to run `nekotatsu clear` to remove any files nekotatsu downloaded/generated from `nekotatsu update`.
 
-Run the commands with `--help` to view additional options.
+Run the commands with `--help` to view these messages.
+
+```
+Usage: nekotatsu <COMMAND>
+
+Commands:
+  convert  Convert a Neko/Tachiyomi backup into one that Kotatsu can read
+  update   Downloads latest Tachiyomi source information and updates Kotatsu parser list. The resulting files are saved in the app's data directory (`~/.local/share/nekotatsu` on Linux and `%APPDATA%\Nekotatsu\data` on Windows) as `tachi_sources.json` and `kotatsu_parsers.json`
+  clear    Deletes any files downloaded by nekotatsu (the data directory); Effectively the same as running `rm -rf ~/.local/share/nekotatsu` on Linux and `rmdir /s /q %APPDATA%\Nekotatsu` on Windows
+  delete   Alias for `clear`
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+```
+
+`convert`
+```
+Usage: nekotatsu convert [OPTIONS] <INPUT>
+
+Arguments:
+  <INPUT>  Path to Neko/Tachi backup
+
+Options:
+  -o, --output <OUTPUT>  Optional output name
+  -v, --verbose          Display some additional information
+  -r, --reverse          Convert to Neko instead
+```
+
+`update`
+```
+Usage: nekotatsu update [OPTIONS]
+
+Options:
+  -k, --kotatsu-link <KOTATSU_LINK>  Download URL for Kotatsu parsers repo [default: https://github.com/KotatsuApp/kotatsu-parsers/archive/refs/heads/master.zip]
+  -t, --tachi-link <TACHI_LINK>      Download URL for Tachiyomi extension json list (minified) [default: https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json]
+  -f, --force-download               Force download of files even if they already exist
+```
 
 ## Motivation
 First off, why specifically Neko instead of mainline Tachiyomi? No real reason honestly. It's not like I have some sort of agenda against Tachiyomi, I just use Neko specifically since I only use Mangadex, and I created this tool for my own use. (Also the name "Nekotatsu" is kinda cool.)
