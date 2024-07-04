@@ -185,9 +185,9 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favo
         })?;
 
     let backup = nekotatsu::neko::Backup::decode(&mut neko_read.as_slice())?;
-    let mut result_categories = Vec::new();
-    let mut result_favourites = Vec::new();
-    let mut result_history = Vec::new();
+    let mut result_categories = Vec::with_capacity(backup.backup_categories.len() + 1);
+    let mut result_favourites = Vec::with_capacity(backup.backup_manga.len());
+    let mut result_history = Vec::with_capacity(backup.backup_manga.len());
     let mut result_bookmarks = Vec::new();
     
     let mut total_manga = 0;
