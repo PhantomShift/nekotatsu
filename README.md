@@ -45,6 +45,7 @@ Arguments:
 
 Options:
   -o, --output <OUTPUT>  Optional output name
+  -f, --favorites-name <FAVORITES_NAME>  Category name for favorited manga [default: Library]
   -v, --verbose          Display some additional information
   -r, --reverse          Convert to Neko instead
 ```
