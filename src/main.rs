@@ -70,6 +70,12 @@ enum Commands {
         force_download: bool,
     },
 
+    /// Output backup info
+    #[command(hide(true))]
+    Debug {
+        input: String
+    },
+
     /// Deletes any files downloaded by nekotatsu (the data directory);
     /// Effectively the same as running `rm -rf ~/.local/share/nekotatsu` on Linux and `rmdir /s /q %APPDATA%\Nekotatsu` on Windows.
     Clear,
@@ -493,6 +499,25 @@ fn main() -> std::io::Result<()> {
                 neko_to_kotatsu(input_path, output_path, verbose)
             }
         },
+
+        Commands::Debug { input } => {
+            let input_path = input;
+            let neko_read = decode_gzip_backup(&input_path)
+                .or_else(|e| {
+                    Err(match e.kind() {
+                        io::ErrorKind::Interrupted | io::ErrorKind::InvalidInput => io::Error::new(std::io::ErrorKind::InvalidInput,
+                            format!("Error occurred when parsing input archive, is it an actual neko backup? Original error: {e}")
+                        ),
+                        _ => e
+                    })
+                })?;
+    
+            let backup = nekotatsu::neko::Backup::decode(&mut neko_read.as_slice())?;
+
+            println!("{backup:?}");
+
+            Ok(())
+        }
 
         Commands::Clear | Commands::Delete => {
             
