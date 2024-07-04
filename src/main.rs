@@ -24,6 +24,9 @@ lazy_static!{
     static ref KOTATSU_PARSE_PATH: PathBuf = PathBuf::from(PROJECT_DIR.data_dir()).join("kotatsu_parsers.json");
 }
 
+const CATEGORY_DEFAULT: i64 = 2;
+const CATEGORY_OFFSET: i64 = CATEGORY_DEFAULT + 1;
+
 /// Simple CLI tool that converts Neko backups into Kotatsu backups
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -42,6 +45,10 @@ enum Commands {
         /// Optional output name
         #[arg(short, long)]
         output: Option<String>,
+
+        /// Category name for favorited manga.
+        #[arg(short, long, default_value_t = String::from("Library"))]
+        favorites_name: String,
 
         /// Display some additional information
         #[arg(short, long)]
@@ -166,7 +173,7 @@ fn decode_gzip_backup(path: &str) -> std::io::Result<Vec<u8>> {
     return Ok(buf)
 }
 
-fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool) -> std::io::Result<()> {
+fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favorites_name: String) -> std::io::Result<()> {
     let neko_read = decode_gzip_backup(&input_path)
         .or_else(|e| {
             Err(match e.kind() {
@@ -187,16 +194,26 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool) -> s
     let mut errored_manga = 0;
     let mut errored_sources = HashMap::new();
 
+    result_categories.push(KotatsuCategoryBackup {
+        category_id: CATEGORY_DEFAULT,
+        created_at: 0,
+        sort_key: 0,
+        title: favorites_name,
+        order: Some(String::from("NAME")),
+        track: Some(true),
+        show_in_lib: Some(true),
+        deleted_at: 0
+    });
     for (id, category) in backup.backup_categories.iter().enumerate() {
         result_categories.push(KotatsuCategoryBackup {
             // kotatsu appears to not allow index 0 for category id
-            category_id: id as i64 + 1,
+            category_id: id as i64 + CATEGORY_OFFSET,
             created_at: 0,
             sort_key: category.order,
             title: category.name.clone(),
             order: None,
             track: None,
-            show_in_lib: None,
+            show_in_lib: Some(true),
             deleted_at: 0
         });
     }
@@ -229,18 +246,21 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool) -> s
             continue;
         }
 
-        if manga.categories.len() > 0 {
-            for category_id in manga.categories.iter() {
-                result_favourites.push(KotatsuFavouriteBackup {
-                    manga_id: kotatsu_manga.id.clone(),
-                    category_id: *category_id as i64 + 1,
-                    sort_key: 0,
-                    created_at: 0,
-                    deleted_at: 0,
-                    manga: kotatsu_manga.clone()
-                });
+        let make_fav_backup = |id: i64| {
+            KotatsuFavouriteBackup {
+                manga_id: kotatsu_manga.id.clone(),
+                category_id: id,
+                sort_key: 0,
+                created_at: 0,
+                deleted_at: 0,
+                manga: kotatsu_manga.clone()
             }
+        };
+        for category_id in manga.categories.iter() {
+            result_favourites.push(make_fav_backup(*category_id as i64 + CATEGORY_OFFSET))
         }
+        result_favourites.push(make_fav_backup(CATEGORY_DEFAULT));
+
         let latest_chapter = manga.chapters.iter().fold(None, |current, checking| {
             match current {
                 None if checking.read => Some(checking),
@@ -466,7 +486,7 @@ fn main() -> std::io::Result<()> {
             Ok(())
         }
 
-        Commands::Convert { input, output, verbose, reverse } => {
+        Commands::Convert { input, output, favorites_name, verbose, reverse } => {
 
             let input_path = input;
             let output_path = output.unwrap_or(if reverse {
@@ -496,7 +516,7 @@ fn main() -> std::io::Result<()> {
             if reverse {
                 kotatsu_to_neko(input_path, output_path)
             } else {
-                neko_to_kotatsu(input_path, output_path, verbose)
+                neko_to_kotatsu(input_path, output_path, verbose, favorites_name)
             }
         },
 
