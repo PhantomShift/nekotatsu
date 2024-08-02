@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::{self, Read, Write}, path::PathBuf, sync::Mutex};
+use std::{collections::{HashMap, HashSet}, io::{self, Read, Write}, path::PathBuf, sync::Mutex};
 
 use flate2::{write::GzEncoder, Compression};
 use once_cell::sync::OnceCell;
@@ -191,10 +191,11 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favo
     let mut result_favourites = Vec::with_capacity(backup.backup_manga.len());
     let mut result_history = Vec::with_capacity(backup.backup_manga.len());
     let mut result_bookmarks = Vec::new();
-    
     let mut total_manga = 0;
     let mut errored_manga = 0;
     let mut errored_sources = HashMap::new();
+    let mut errored_sources_count: HashMap<String, usize> = HashMap::new();
+    let mut unknown_sources = HashSet::new();
 
     result_categories.push(KotatsuCategoryBackup {
         category_id: CATEGORY_DEFAULT,
@@ -238,9 +239,17 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favo
             let source = get_source(manga.source);
             if let Ok(source) = source {
                 if verbose {
-                    println!("[WARNING] Unable to convert '{}' from source {} ({}), Kotatsu parser not found", manga.title, source.name, source.baseUrl);
+                    if source.name == "Unknown" {
+                        println!("[WARNING] Unable to convert '{}', unknown Tachiyomi/Mihon source (ID: {})", manga.title, source.id);
+                    } else {
+                        println!("[WARNING] Unable to convert '{}' from source {} ({}), Kotatsu parser not found", manga.title, source.name, source.baseUrl);
+                    }
                 }
-                errored_sources.insert(source.name, source.baseUrl);
+                errored_sources.insert(source.name.clone(), source.baseUrl);
+                errored_sources_count.entry(source.name.clone()).and_modify(|e| *e += 1).or_insert(0);
+                if source.name == "Unknown" {
+                    unknown_sources.insert(source.id);
+                }
             } else if verbose {
                 println!("[WARNING] Unable to convert '{}', unknown Tachiyomi source (ID {})", manga.title, manga.source)
             }
@@ -342,13 +351,19 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favo
     writer.finish()?;
 
     if errored_manga > 0 {
-        println!("{errored_manga} of {total_manga} manga and {} sources failed to convert.", errored_sources.iter().count());
+        println!("{errored_manga} of {total_manga} manga and {} sources failed to convert ({} unknown).", errored_sources.len(), unknown_sources.len());
         if !verbose {
             println!("Try running again with verbose (-v) on for details");
         } else {
             println!("Sources that errorred:");
             for (name, url) in errored_sources.iter() {
-                println!("{name} ({url})");
+                println!("{name} ({url}), count: {}", errored_sources_count.get(name).unwrap_or(&0));
+            }
+            if unknown_sources.len() > 0 {
+                println!("Unknown Tachiyomi/Mihon source IDs:");
+                for id in unknown_sources.iter() {
+                    println!("{id}");
+                }
             }
         }
         println!("Conversion completed with errors, output: {}", output_path.display());
