@@ -56,8 +56,11 @@ pub fn get_source(id: i64) -> std::io::Result<SourceInfo> {
         std::io::Result::Ok(extensions)
     })?;
 
-    extensions.iter().flat_map(|extension| &extension.sources)
-        .find(|source| source.id == id)
-        .map(|s| s.clone())
-        .ok_or(Error::new(std::io::ErrorKind::NotFound, "Source not found"))
+    Ok(extensions.iter().flat_map(|extension| &extension.sources)
+            .find(|source| source.id == id)
+            .map(|s| s.clone())
+            .unwrap_or(SourceInfo {
+                id,
+                ..Default::default()
+            }))
 }
