@@ -115,7 +115,9 @@ fn manga_get_source_name(manga: &nekotatsu::neko::BackupManga) -> String {
                 if let Ok(parser_list) = parser_list {
                     parser_list.iter().find(|p| {
                         if let Ok(source) = extensions::get_source(manga.source) {
-                            (p.name.to_lowercase() == source.name) || (p.domains.contains(&source.baseUrl.trim_start_matches("https://").to_string()))
+                            (p.name.to_lowercase() == source.name) ||
+                            (p.domains.contains(&source.baseUrl.trim_start_matches("http://").trim_start_matches("https://").to_string())) ||
+                            (p.domains.contains(&source.baseUrl.trim_start_matches("http://").trim_start_matches("https://").trim_start_matches("www.").to_string()))
                         } else {
                             false
                         }
