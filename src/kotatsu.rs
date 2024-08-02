@@ -5,15 +5,47 @@ use zip::ZipArchive;
 use regex::Regex;
 use lazy_static::lazy_static;
 
+enum DomainCaptureMethod {
+    Single(Regex),
+    Multiple(Regex),
+}
+
+impl DomainCaptureMethod {
+    fn capture_domains(&self, subject: &str) -> Option<Vec<String>> {
+        match self {
+            DomainCaptureMethod::Single(r) => {
+                if let Some(captures) = r.captures(subject) {
+                    return Some(vec![captures["domain"].to_string()])
+                }
+                None
+            }
+            DomainCaptureMethod::Multiple(r) => {
+                if let Some(captures) = r.captures(subject) {
+                    let list = &captures["domains"];
+                    return Some(list.split(",")
+                        .map(|s| s.replace('"', "").replace(&[' ', '\t', '\n', '\r'], ""))
+                        .filter(|s| !s.is_empty())
+                        .collect())
+                }
+                None
+            }
+        }
+    }
+}
+
 lazy_static! {
     static ref PARSER_CAPTURE: Regex = Regex::new(r#"@MangaSourceParser\(.(?P<name>\w*)., .(?P<title>[\w\s\(\)]+).(, .(?P<locale>\w*).(, (?P<type>[\w\.]+))?)?"#).unwrap();
     // static ref DOMAIN_CAPTURE_CUSTOM: Regex = Regex::new(r#"\w+Parser\(context, MangaSource\.\w+, .(?P<domain>[\w\.\-]+)."#).unwrap();
-    static ref DOMAIN_CAPTURE_CUSTOM: Regex = Regex::new(r#"\(\s*context,\s*MangaSource\.\w+,\s*.(?P<domain>[\w\.\-]+)."#).unwrap();
     // static ref DOMAIN_CAPTURE: Regex = Regex::new(r#"ConfigKey\.Domain\((?P<domains>.+)\)"#).unwrap();
-    static ref DOMAIN_CAPTURE: Regex = regex::RegexBuilder::new(r#"ConfigKey\.Domain\((?P<domains>.+?)\)"#)
-        .dot_matches_new_line(true)
-        .build()
-        .unwrap();
+    static ref DOMAIN_CAPTURE_METHODS: Vec<DomainCaptureMethod> = vec![
+        DomainCaptureMethod::Multiple(regex::RegexBuilder::new(r#"ConfigKey\.Domain\((?P<domains>.+?)\)"#)
+            .dot_matches_new_line(true)
+            .build()
+            .unwrap()),
+        DomainCaptureMethod::Single(Regex::new(r#"\w+\(\s*context,\s*\w+Source\.\w+,\s*"(?P<domain>[\w\.\-]+)""#).unwrap()),
+        DomainCaptureMethod::Single(Regex::new(r#"\(\s*context,\s*MangaSource\.\w+,\s*.(?P<domain>[\w\.\-]+)."#).unwrap()),
+        DomainCaptureMethod::Single(Regex::new(r#"\w+\(\s*context = context,\s*source = \w+.\w+,\s*(siteId = \d+,\s*)?siteDomain = "(?P<domain>[\w\.\-]+)""#).unwrap())
+    ];
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -147,7 +179,7 @@ pub fn correct_url(source_name: &str, url: &str) -> String {
     }
 }
 
-fn get_parser_definitions(archive: ZipArchive<Cursor<Vec<u8>>>) -> std::io::Result<Vec<String>> {
+fn get_parser_definitions(archive: ZipArchive<Cursor<Vec<u8>>>) -> std::io::Result<Vec<(String, String)>> {
     let mut files = Vec::new();
 
     let root = archive.file_names().nth(0)
@@ -162,7 +194,7 @@ fn get_parser_definitions(archive: ZipArchive<Cursor<Vec<u8>>>) -> std::io::Resu
             let mut file = clone.by_name(path)?;
             let mut s = String::new();
             file.read_to_string(&mut s)?;
-            files.push(s);
+            files.push((s, path.to_string()));
         }
     }
 
@@ -174,24 +206,22 @@ pub fn update_parsers(path: &Path) -> std::io::Result<()> {
     let reader = zip::read::ZipArchive::new(bytes)?;
     let files = get_parser_definitions(reader)?;
     let mut parsers = Vec::new();
-    for s in files.iter() {
-        let domains = {
-            // (Known) parsers I will likely need to make custom code for: ExHentai and NineManga
-            if let Some(c) = DOMAIN_CAPTURE.captures(s) {
-                let list = &c["domains"];
-                list.replace(['\n', '\t', ' '], "")
-                    .split(",")
-                    .map(|d| d.replace('"', ""))
-                    .filter(|s| !s.is_empty())
-                    .collect()
-            } else if let Some(c) = DOMAIN_CAPTURE_CUSTOM.captures(s) {
-                vec![c["domain"].to_string()]
-            } else {
-                Vec::new()
-            }
-        };
+    for (contents, path) in files.iter() {
+        // (Known) parsers I will likely need to make custom code for: ExHentai and NineManga
+        let captures = PARSER_CAPTURE.captures_iter(&contents).collect::<Vec<_>>();
+        if captures.len() == 0 {
+            continue;
+        }
 
-        for c in PARSER_CAPTURE.captures_iter(s) {
+        let domains = DOMAIN_CAPTURE_METHODS.iter().find_map(|method| {
+            method.capture_domains(&contents)
+        }).unwrap_or(Vec::new());
+
+        if domains.len() == 0 {
+            println!("[WARNING]: Kotatsu parser was detected but domains could not be found automatically. File path: '{path}'")
+        }
+
+        for c in captures {
             let parser = KotatsuParser {
                 name: c["name"].to_string(),
                 title: c["title"].to_string(),
