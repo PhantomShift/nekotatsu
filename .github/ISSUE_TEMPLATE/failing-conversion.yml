@@ -22,6 +22,9 @@ body:
             (OPTIONAL) The source is listed by
             [Keiyoushi](https://keiyoushi.github.io/extensions/)
           required: false
+        - label: >-
+            (OPTIONAL) I have tried converting with soft match on (`--soft-match`)
+          required: false
   - type: input
     id: source-name
     attributes:

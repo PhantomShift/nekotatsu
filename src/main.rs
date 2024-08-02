@@ -57,6 +57,10 @@ enum Commands {
         /// Convert to Neko instead
         #[arg(short, long)]
         reverse: bool,
+
+        /// Strip top-level domains when comparing Tachiyomi/Mihon sources to Kotatsu parsers
+        #[arg(short, long)]
+        soft_match: bool,
     },
 
     /// Downloads latest Tachiyomi source information and
@@ -90,7 +94,7 @@ enum Commands {
     Delete
 }
 
-fn manga_get_source_name(manga: &nekotatsu::neko::BackupManga) -> String {
+fn manga_get_source_name(manga: &nekotatsu::neko::BackupManga, soft_match: bool) -> String {
     static SOURCES: OnceCell<Mutex<HashMap<i64, String>>> = OnceCell::new();
     static KOTATSU_PARSER_LIST: OnceCell<Vec<KotatsuParser>> = OnceCell::new();
 
@@ -112,18 +116,33 @@ fn manga_get_source_name(manga: &nekotatsu::neko::BackupManga) -> String {
                     })
                 });
 
-                if let Ok(parser_list) = parser_list {
-                    parser_list.iter().find(|p| {
-                        if let Ok(source) = extensions::get_source(manga.source) {
-                            (p.name.to_lowercase() == source.name) ||
-                            (p.domains.contains(&source.baseUrl.trim_start_matches("http://").trim_start_matches("https://").to_string())) ||
-                            (p.domains.contains(&source.baseUrl.trim_start_matches("http://").trim_start_matches("https://").trim_start_matches("www.").to_string()))
-                        } else {
-                            false
-                        }
-                    }).map_or(String::from("UNKNOWN"), |p| p.name.clone())
-                } else {
-                    String::from("UNKNOWN")
+                match (parser_list, extensions::get_source(manga.source)) {
+                    (Ok(parser_list), Ok(source)) => {
+                        let urls = vec![
+                            source.baseUrl.trim_start_matches("http://").trim_start_matches("https://").to_string(),
+                            source.baseUrl.trim_start_matches("http://").trim_start_matches("https://").trim_start_matches("www.").to_string(),
+                        ];
+                        parser_list.iter().find(|p| {
+                            (p.name.to_lowercase() == source.name) || {
+                                p.domains.iter().any(|d| {
+                                    urls.iter().any(|url| d == url)
+                                })
+                            }
+                        }).or(soft_match.then_some({
+                            // Boldly assuming that there's only one relevant top-level domain
+                            let url = source.baseUrl.trim_start_matches("http://").trim_start_matches("https://");
+                            match url.rsplit_once(".") {
+                                Some((name, _tld)) => {
+                                    parser_list.iter().find(|p| {
+                                        p.domains.iter().any(|d| d.contains(name))
+                                    })
+                                },
+                                None => None
+                            }
+                            
+                        }).flatten()).map_or(String::from("UNKNOWN"), |p| p.name.clone())
+                    }
+                    _ => String::from("UNKNOWN")
                 }
             });
 
@@ -132,10 +151,10 @@ fn manga_get_source_name(manga: &nekotatsu::neko::BackupManga) -> String {
     }
 }
 
-fn manga_to_kotatsu(manga: &nekotatsu::neko::BackupManga) -> Result<KotatsuMangaBackup, io::Error> {
+fn manga_to_kotatsu(manga: &nekotatsu::neko::BackupManga, soft_match: bool) -> Result<KotatsuMangaBackup, io::Error> {
     let source_info = extensions::get_source(manga.source)?;
     let domain = source_info.baseUrl;
-    let source_name = manga_get_source_name(manga);
+    let source_name = manga_get_source_name(manga, soft_match);
     let relative_url = kotatsu::correct_url(&source_name, &manga.url);
     // value used when calling generateUid
     let manga_identifier = kotatsu::correct_identifier(&source_name, &relative_url);
@@ -175,7 +194,7 @@ fn decode_gzip_backup(path: &str) -> std::io::Result<Vec<u8>> {
     return Ok(buf)
 }
 
-fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favorites_name: String) -> std::io::Result<()> {
+fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favorites_name: String, soft_match: bool) -> std::io::Result<()> {
     let neko_read = decode_gzip_backup(&input_path)
         .or_else(|e| {
             Err(match e.kind() {
@@ -233,7 +252,7 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favo
             continue;
         }
 
-        let kotatsu_manga = manga_to_kotatsu(&manga)?;
+        let kotatsu_manga = manga_to_kotatsu(&manga, soft_match)?;
 
         if kotatsu_manga.source == "UNKNOWN" {
             let source = get_source(manga.source);
@@ -246,7 +265,7 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favo
                     }
                 }
                 errored_sources.insert(source.name.clone(), source.baseUrl);
-                errored_sources_count.entry(source.name.clone()).and_modify(|e| *e += 1).or_insert(0);
+                errored_sources_count.entry(source.name.clone()).and_modify(|e| *e += 1).or_insert(1);
                 if source.name == "Unknown" {
                     unknown_sources.insert(source.id);
                 }
@@ -369,6 +388,9 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favo
         println!("Conversion completed with errors, output: {}", output_path.display());
     } else {
         println!("{total_manga} manga successfully converted, output: {}", output_path.display());
+    }
+    if soft_match {
+        println!("[IMPORTANT] Command run with 'soft match' on; some sources may not behave as intended")
     }
 
     Ok(())
@@ -503,7 +525,7 @@ fn main() -> std::io::Result<()> {
             Ok(())
         }
 
-        Commands::Convert { input, output, favorites_name, verbose, reverse } => {
+        Commands::Convert { input, output, favorites_name, verbose, reverse, soft_match } => {
 
             let input_path = input;
             let output_path = output.unwrap_or(if reverse {
@@ -533,7 +555,7 @@ fn main() -> std::io::Result<()> {
             if reverse {
                 kotatsu_to_neko(input_path, output_path)
             } else {
-                neko_to_kotatsu(input_path, output_path, verbose, favorites_name)
+                neko_to_kotatsu(input_path, output_path, verbose, favorites_name, soft_match)
             }
         },
 
