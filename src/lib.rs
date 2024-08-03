@@ -283,7 +283,7 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favo
         // ignore locally imported manga
         if manga.source == 0 {
             if verbose {
-                buffer.write_fmt(format_args!("[WARNING] Unable to convert '{}', local manga currently unsupported", manga.title))?;
+                buffer.write_fmt(format_args!("[WARNING] Unable to convert '{}', local manga currently unsupported\n", manga.title))?;
             }
             errored_manga += 1;
             continue;
@@ -296,9 +296,9 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favo
             if let Ok(source) = source {
                 if verbose {
                     if source.name == "Unknown" {
-                        buffer.write_fmt(format_args!("[WARNING] Unable to convert '{}', unknown Tachiyomi/Mihon source (ID: {})", manga.title, source.id))?;
+                        buffer.write_fmt(format_args!("[WARNING] Unable to convert '{}', unknown Tachiyomi/Mihon source (ID: {})\n", manga.title, source.id))?;
                     } else {
-                        buffer.write_fmt(format_args!("[WARNING] Unable to convert '{}' from source {} ({}), Kotatsu parser not found", manga.title, source.name, source.baseUrl))?;
+                        buffer.write_fmt(format_args!("[WARNING] Unable to convert '{}' from source {} ({}), Kotatsu parser not found\n", manga.title, source.name, source.baseUrl))?;
                     }
                 }
                 errored_sources.insert(source.name.clone(), source.baseUrl);
@@ -307,7 +307,7 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favo
                     unknown_sources.insert(source.id);
                 }
             } else if verbose {
-                buffer.write_fmt(format_args!("[WARNING] Unable to convert '{}', unknown Tachiyomi source (ID {})", manga.title, manga.source))?;
+                buffer.write_fmt(format_args!("[WARNING] Unable to convert '{}', unknown Tachiyomi source (ID {})\n", manga.title, manga.source))?;
             }
             errored_manga += 1;
             continue;
@@ -413,14 +413,14 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favo
         if !verbose {
             buffer.write_fmt(format_args!("Try running again with verbose (-v) on for details\n"))?;
         } else {
-            buffer.write_fmt(format_args!("Sources that errorred:"))?;
+            buffer.write_fmt(format_args!("Sources that errorred:\n"))?;
             for (name, url) in errored_sources.iter() {
-                buffer.write_fmt(format_args!("{name} ({url}), count: {}", errored_sources_count.get(name).unwrap_or(&0)))?;
+                buffer.write_fmt(format_args!("{name} ({url}), count: {}\n", errored_sources_count.get(name).unwrap_or(&0)))?;
             }
             if unknown_sources.len() > 0 {
-                buffer.write_fmt(format_args!("Unknown Tachiyomi/Mihon source IDs:"))?;
+                buffer.write_fmt(format_args!("Unknown Tachiyomi/Mihon source IDs:\n"))?;
                 for id in unknown_sources.iter() {
-                    buffer.write_fmt(format_args!("{id}"))?;
+                    buffer.write_fmt(format_args!("{id}\n"))?;
                 }
             }
         }
@@ -429,7 +429,7 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favo
         buffer.write_fmt(format_args!("{total_manga} manga successfully converted, output: {}\n", output_path.display()))?;
     }
     if soft_match {
-        buffer.write_fmt(format_args!("[IMPORTANT] Command run with 'soft match' on; some sources may not behave as intended"))?;
+        buffer.write_fmt(format_args!("[IMPORTANT] Command run with 'soft match' on; some sources may not behave as intended\n"))?;
     }
 
     Ok(CommandResult::Success(
