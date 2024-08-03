@@ -1,4 +1,5 @@
-import { VerticalBox, Button, LineEdit, CheckBox, TextEdit } from "std-widgets.slint";
+import { VerticalBox, Button, LineEdit, CheckBox, TextEdit, Palette } from "std-widgets.slint";
+import { ChildWindow } from "./ChildWindow.slint";
 
 component FileButton inherits Button {
     text: "🗂️";
@@ -18,12 +19,26 @@ export component Application inherits Window {
     in-out property <string> popup-text;
     in-out property <string> in-path;
     in-out property <string> out-path;
+    in-out property <string> library-name: "Library";
     in-out property <bool> processing;
 
     out property <bool> view-output: true;
     out property <bool> verbose-output: false;
+    out property <bool> soft-match: false;
 
+    main-area := TouchArea {
+        height: parent.height;
+        width: parent.width;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.move {
+                if !soft-match-area.has-hover {
+                    soft-match-tooltip.visible = false;
+                }
+            }
+        }
+    }
     VerticalBox {
+        alignment: start;
         Button {
             text: "Update Sources and Parsers";
             enabled: !processing;
@@ -50,9 +65,20 @@ export component Application inherits Window {
                 edited => { out-path = self.text }
             }
         }
+        HorizontalLayout {
+            Text {
+                vertical-alignment: center;
+                text: "Library Name";
+            }
+            LineEdit {
+                placeholder-text: "Library";
+                text: library-name;
+                edited => { library-name = self.text }
+            }
+        }
         Button {
             text: "Convert";
-            enabled: !processing && in-path != "" && out-path != "";
+            enabled: !processing && in-path != "" && out-path != "" && library-name != "";
             max-height: self.min-height;
             clicked => {
                 convert-clicked()
@@ -68,6 +94,38 @@ export component Application inherits Window {
             checked: verbose-output;
             toggled => { verbose-output = self.checked }
             text: "Verbose Output";
+        }
+        Rectangle {
+            HorizontalLayout {
+                CheckBox {
+                    checked: soft-match;
+                    toggled => { soft-match = self.checked }
+                    text: "Soft Match";
+                }
+            }
+            soft-match-area := TouchArea {
+                z: 10;
+                height: parent.height; enabled: true;
+                mouse-cursor: MouseCursor.help;
+                width: parent.width;
+                soft-match-tooltip := Rectangle {
+                    visible: false;
+                    background: Palette.background;
+                    HorizontalLayout {
+                        Text { text: "Allow disregarding top-level domain\n(i.e. mangadex.org could match mangadex.com)"; }
+                    }
+                }
+                clicked => { soft-match = !soft-match }
+                pointer-event(event) => {
+                    if event.kind == PointerEventKind.move {
+                        if self.has-hover {
+                            soft-match-tooltip.visible = true;
+                            soft-match-tooltip.x = self.mouse-x;
+                            soft-match-tooltip.y = self.mouse-y;
+                        }
+                    }
+                }
+            }
         }
         Rectangle {}
     }
