@@ -1,4 +1,4 @@
-import { TextEdit, Button } from "std-widgets.slint";
+import { TextEdit, Button, ScrollView } from "std-widgets.slint";
 export component ChildWindow inherits Window {
     title: "Output";
     icon: @image-url("../../assets/logo.png");
@@ -6,21 +6,33 @@ export component ChildWindow inherits Window {
     callback close-clicked();
 
     in property <string> child-text;
+   // for some reason viewport height isn't calculating properly, so this needs to be calculated manually
+    in property <int> lines;
     in property <string> description;
     in property <int> init-height;
-    
+
     preferred-height: init-height * 1px;
 
     VerticalLayout {
         Text {
             text: description;
         }
-        if child-text != "" : TextEdit {
+        output := TextEdit {
             wrap: no-wrap;
             text: child-text;
             read-only: true;
+            viewport-height: lines * (root.default-font-size + 8px);
+            visible: child-text != "";
         }
         HorizontalLayout {
+            if output.visible : Button {
+                text: "Copy to Clipboard";
+                clicked => {
+                    output.select-all();
+                    output.copy();
+                    output.set-selection-offsets(0, 0);
+                }
+            }
             Button {
                 text: "Close";
                 clicked => { close-clicked() }

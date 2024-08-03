@@ -31,6 +31,7 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
         let app = cc_handle.unwrap();
         let input = app.get_in_path().to_string();
         let output = Some(app.get_out_path().to_string());
+        let favorites_name = app.get_library_name().to_string();
         let verbose = app.get_verbose_output();
         let print_output = !app.get_view_output();
         let cc_handle = app.as_weak();
@@ -39,7 +40,7 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
             let result = nekotatsu::run_command(Commands::Convert {
                 input,
                 output,
-                favorites_name: String::from("Library"),
+                favorites_name,
                 verbose,
                 reverse: false,
                 soft_match: false,
@@ -55,6 +56,7 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
                                 if let crate::CommandResult::Success(path, output) = result {
                                     child.set_description(format!("Saved to '{path}'").into());
                                     if !print_output {
+                                        child.set_lines(output.lines().count() as i32);
                                         child.set_child_text(output.into());
                                         child.set_init_height(app.window().size().height as i32);
                                     }
