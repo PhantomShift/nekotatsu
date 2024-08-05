@@ -52,7 +52,7 @@ pub enum Commands {
         output: Option<String>,
 
         /// Category name for favorited manga.
-        #[arg(short, long, default_value_t = String::from("Library"))]
+        #[arg(alias("fn"), long, default_value_t = String::from("Library"))]
         favorites_name: String,
 
         /// Display some additional information
