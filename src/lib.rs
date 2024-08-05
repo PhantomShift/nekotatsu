@@ -55,9 +55,13 @@ pub enum Commands {
         #[arg(alias("fn"), long, default_value_t = String::from("Library"))]
         favorites_name: String,
 
-        /// Display some additional information
+        /// Display some additional information. Overrides verbose option.
         #[arg(short, long)]
         verbose: bool,
+
+        /// Display all debug information
+        #[arg(alias("-vv"), long)]
+        very_verbose: bool,
 
         /// Convert to Neko instead
         #[arg(short, long)]
@@ -104,6 +108,22 @@ pub enum Commands {
     Clear,
     /// Alias for `clear`
     Delete
+}
+
+pub enum CommandVerbosity {
+    None,
+    Verbose,
+    VeryVerbose
+}
+
+impl CommandVerbosity {
+    fn should_display(&self, has_occurred: bool) -> bool {
+        match *self {
+            CommandVerbosity::None => false,
+            CommandVerbosity::Verbose => !has_occurred,
+            CommandVerbosity::VeryVerbose => true,
+        }
+    }
 }
 
 pub enum CommandResult {
@@ -225,7 +245,7 @@ fn decode_gzip_backup(path: &str) -> std::io::Result<Vec<u8>> {
     return Ok(buf)
 }
 
-fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favorites_name: String, soft_match: bool, print_output: bool) -> std::io::Result<CommandResult> {
+fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbosity: CommandVerbosity, favorites_name: String, soft_match: bool, print_output: bool) -> std::io::Result<CommandResult> {
     let mut buffer = if print_output {
         Buffer::Stdout(std::io::stdout())
     } else {
@@ -282,7 +302,7 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favo
 
         // ignore locally imported manga
         if manga.source == 0 {
-            if verbose {
+            if matches!(verbosity, CommandVerbosity::Verbose) {
                 buffer.write_fmt(format_args!("[WARNING] Unable to convert '{}', local manga currently unsupported\n", manga.title))?;
             }
             errored_manga += 1;
@@ -294,20 +314,23 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favo
         if kotatsu_manga.source == "UNKNOWN" {
             let source = get_source(manga.source);
             if let Ok(source) = source {
-                if verbose {
+                if verbosity.should_display(errored_sources.get(&source.name).is_some()) {
                     if source.name == "Unknown" {
                         buffer.write_fmt(format_args!("[WARNING] Unable to convert '{}', unknown Tachiyomi/Mihon source (ID: {})\n", manga.title, source.id))?;
                     } else {
                         buffer.write_fmt(format_args!("[WARNING] Unable to convert '{}' from source {} ({}), Kotatsu parser not found\n", manga.title, source.name, source.baseUrl))?;
-                    }
+                    } 
                 }
                 errored_sources.insert(source.name.clone(), source.baseUrl);
                 errored_sources_count.entry(source.name.clone()).and_modify(|e| *e += 1).or_insert(1);
                 if source.name == "Unknown" {
                     unknown_sources.insert(source.id);
                 }
-            } else if verbose {
-                buffer.write_fmt(format_args!("[WARNING] Unable to convert '{}', unknown Tachiyomi source (ID {})\n", manga.title, manga.source))?;
+            } else {
+                if verbosity.should_display(unknown_sources.contains(&manga.source.to_string())) {
+                    buffer.write_fmt(format_args!("[WARNING] Unable to convert '{}', unknown Tachiyomi source (ID {})\n", manga.title, manga.source))?;
+                }
+                unknown_sources.insert(manga.source.to_string());
             }
             errored_manga += 1;
             continue;
@@ -410,21 +433,48 @@ fn neko_to_kotatsu(input_path: String, output_path: PathBuf, verbose: bool, favo
 
     if errored_manga > 0 {
         buffer.write_fmt(format_args!("{errored_manga} of {total_manga} manga and {} sources failed to convert ({} unknown).\n", errored_sources.len(), unknown_sources.len()))?;
-        if !verbose {
+        if matches!(verbosity, CommandVerbosity::None) {
             buffer.write_fmt(format_args!("Try running again with verbose (-v) on for details\n"))?;
         } else {
-            buffer.write_fmt(format_args!("Sources that errorred:\n"))?;
-            for (name, url) in errored_sources.iter() {
-                buffer.write_fmt(format_args!("{name} ({url}), count: {}\n", errored_sources_count.get(name).unwrap_or(&0)))?;
+            match verbosity {
+                CommandVerbosity::None => (),
+                CommandVerbosity::Verbose => {
+                    buffer.write_fmt(format_args!("Sources that errorred: {}\n", errored_sources.keys().into_iter().fold(String::new(), |mut a, s| {
+                        a.push_str(s);
+                        a.push_str(", ");
+                        a
+                    }).trim_end_matches(", ")))?;
+                }
+                CommandVerbosity::VeryVerbose => {
+                    buffer.write_fmt(format_args!("Sources that errorred:\n"))?;
+                    for (name, url) in errored_sources.iter() {
+                        buffer.write_fmt(format_args!("{name} ({url}), count: {}\n", errored_sources_count.get(name).unwrap_or(&0)))?;
+                    }
+                }
             }
             if unknown_sources.len() > 0 {
-                buffer.write_fmt(format_args!("Unknown Tachiyomi/Mihon source IDs:\n"))?;
-                for id in unknown_sources.iter() {
-                    buffer.write_fmt(format_args!("{id}\n"))?;
+                match verbosity {
+                    CommandVerbosity::None => (),
+                    CommandVerbosity::Verbose => {
+                        buffer.write_fmt(format_args!("Unknown Tachiyomi/Mihon source IDs: {}\n", unknown_sources.iter().fold(String::new(), |mut a, s| {
+                            a.push_str(s); 
+                            a.push_str(" "); 
+                            a
+                        }).trim_end()))?;
+                    }
+                    CommandVerbosity::VeryVerbose => {
+                        buffer.write_fmt(format_args!("Unknown Tachiyomi/Mihon source IDs:\n"))?;
+                        for id in unknown_sources.iter() {
+                            buffer.write_fmt(format_args!("{id}\n"))?;
+                        }
+                    }
                 }
             }
         }
         buffer.write_fmt(format_args!("Conversion completed with errors, output: {}\n", output_path.display()))?;
+        if matches!(verbosity, CommandVerbosity::Verbose) {
+            buffer.write_fmt(format_args!("Run command with very verbose (-vv) to display ALL debug information.\n"))?;
+        }
     } else {
         buffer.write_fmt(format_args!("{total_manga} manga successfully converted, output: {}\n", output_path.display()))?;
     }
@@ -568,7 +618,7 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
             Ok(CommandResult::None)
         }
 
-        Commands::Convert { input, output, favorites_name, verbose, reverse, soft_match, force, print_output } => {
+        Commands::Convert { input, output, favorites_name, verbose, very_verbose, reverse, soft_match, force, print_output } => {
 
             let input_path = input;
             let output_path = output.unwrap_or(if reverse {
@@ -598,7 +648,12 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
             if reverse {
                 kotatsu_to_neko(input_path, output_path)
             } else {
-                neko_to_kotatsu(input_path, output_path, verbose, favorites_name, soft_match, print_output)
+                let verbosity = match (very_verbose, verbose) {
+                    (true, _) => CommandVerbosity::VeryVerbose,
+                    (_, true) => CommandVerbosity::Verbose,
+                    _ => CommandVerbosity::None,
+                };
+                neko_to_kotatsu(input_path, output_path, verbosity, favorites_name, soft_match, print_output)
             }
         },
 

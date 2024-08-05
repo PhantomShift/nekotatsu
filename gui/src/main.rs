@@ -42,6 +42,7 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
                 output,
                 favorites_name,
                 verbose,
+                very_verbose: false,
                 reverse: false,
                 soft_match: false,
                 force: true,
