@@ -42,9 +42,9 @@ lazy_static! {
             .dot_matches_new_line(true)
             .build()
             .unwrap()),
-        DomainCaptureMethod::Single(Regex::new(r#"\w+\(\s*context,\s*\w+Source\.\w+,\s*"(?P<domain>[\w\.\-]+)""#).unwrap()),
-        DomainCaptureMethod::Single(Regex::new(r#"\(\s*context,\s*MangaSource\.\w+,\s*.(?P<domain>[\w\.\-]+)."#).unwrap()),
-        DomainCaptureMethod::Single(Regex::new(r#"\w+\(\s*context = context,\s*source = \w+.\w+,\s*(siteId = \d+,\s*)?siteDomain = "(?P<domain>[\w\.\-]+)""#).unwrap())
+        DomainCaptureMethod::Single(Regex::new(r#"\w+\(\s*context,\s*\w+Source\.\w+,\s*"(?P<domain>[\w\.\-/]+)""#).unwrap()),
+        DomainCaptureMethod::Single(Regex::new(r#"\(\s*context,\s*MangaSource\.\w+,\s*.(?P<domain>[\w\.\-/]+)."#).unwrap()),
+        DomainCaptureMethod::Single(Regex::new(r#"\w+\(\s*context = context,\s*source = \w+.\w+,\s*(siteId = \d+,\s*)?siteDomain = "(?P<domain>[\w\.\-/]+)""#).unwrap())
     ];
 }
 
