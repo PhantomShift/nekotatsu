@@ -671,7 +671,14 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
     
             let backup = nekotatsu::neko::Backup::decode(&mut neko_read.as_slice())?;
 
-            println!("{backup:?}");
+            println!("Manga:");
+            for entry in backup.backup_manga.iter() {
+                println!("{entry:?}");
+            }
+            println!("Categories:");
+            for entry in backup.backup_categories.iter() {
+                println!("{entry:?}")
+            }
 
             Ok(CommandResult::None)
         }
