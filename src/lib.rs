@@ -1,8 +1,8 @@
 use std::{
     collections::{HashMap, HashSet},
+    fs::File,
     io::{self, Read, Write},
     path::PathBuf,
-    sync::Mutex,
 };
 
 use clap::{Parser, Subcommand};
@@ -11,7 +11,6 @@ use directories::ProjectDirs;
 use extensions::SourceInfo;
 use flate2::{write::GzEncoder, Compression};
 use lazy_static::lazy_static;
-use once_cell::sync::OnceCell;
 use prost::Message;
 
 pub mod config;
@@ -23,8 +22,6 @@ pub mod nekotatsu {
 }
 pub mod kotatsu;
 use kotatsu::*;
-
-use crate::extensions::get_source;
 
 lazy_static! {
     static ref PROJECT_DIR: ProjectDirs =
@@ -152,114 +149,124 @@ impl Buffer {
     }
 }
 
-fn manga_get_source_name(manga: &nekotatsu::neko::BackupManga, soft_match: bool) -> String {
-    static SOURCES: OnceCell<Mutex<HashMap<i64, String>>> = OnceCell::new();
-    static KOTATSU_PARSER_LIST: OnceCell<Vec<KotatsuParser>> = OnceCell::new();
+pub struct MangaConverter {
+    sources: HashMap<i64, String>,
+    parsers: Vec<KotatsuParser>,
+    pub extensions: extensions::ExtensionList,
 
-    match manga.source {
-        // Hardcoded (known tachi IDs)
-        2499283573021220255 => "MANGADEX".to_owned(),
-        1998944621602463790 => "MANGAPLUSPARSER_EN".to_owned(),
-
-        // Other online sources
-        _ => {
-            let sources = SOURCES.get_or_init(|| Mutex::new(HashMap::new()));
-            let mut lock = sources.lock().unwrap();
-            let source = lock.entry(manga.source).or_insert_with(|| {
-                let parser_list = KOTATSU_PARSER_LIST.get_or_try_init(|| {
-                    let list = std::fs::read_to_string(KOTATSU_PARSE_PATH.as_path())?;
-                    let r: Result<Vec<KotatsuParser>, serde_json::error::Error> =
-                        serde_json::from_str(&list);
-                    r.map_err(|_e| {
-                        io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            "Error reading Kotatsu parser list",
-                        )
-                    })
-                });
-
-                match (parser_list, extensions::get_source(manga.source)) {
-                    (Ok(parser_list), Ok(source)) => {
-                        let urls = vec![
-                            source
-                                .baseUrl
-                                .trim_start_matches("http://")
-                                .trim_start_matches("https://")
-                                .to_string(),
-                            source
-                                .baseUrl
-                                .trim_start_matches("http://")
-                                .trim_start_matches("https://")
-                                .trim_start_matches("www.")
-                                .to_string(),
-                        ];
-                        parser_list
-                            .iter()
-                            .find(|p| {
-                                (p.name.to_lowercase() == source.name) || {
-                                    p.domains.iter().any(|d| urls.iter().any(|url| d == url))
-                                }
-                            })
-                            .or(soft_match
-                                .then_some({
-                                    // Boldly assuming that there's only one relevant top-level domain
-                                    let url = source
-                                        .baseUrl
-                                        .trim_start_matches("http://")
-                                        .trim_start_matches("https://");
-                                    match url.rsplit_once(".") {
-                                        Some((name, _tld)) => parser_list
-                                            .iter()
-                                            .find(|p| p.domains.iter().any(|d| d.contains(name))),
-                                        None => None,
-                                    }
-                                })
-                                .flatten())
-                            .map_or(String::from("UNKNOWN"), |p| p.name.clone())
-                    }
-                    _ => String::from("UNKNOWN"),
-                }
-            });
-
-            source.clone()
-        }
-    }
+    soft_match: bool,
 }
 
-fn manga_to_kotatsu(
-    manga: &nekotatsu::neko::BackupManga,
-    soft_match: bool,
-) -> Result<KotatsuMangaBackup, io::Error> {
-    let source_info = extensions::get_source(manga.source)?;
-    let domain = source_info.baseUrl;
-    let source_name = manga_get_source_name(manga, soft_match);
-    let relative_url = kotatsu::correct_url(&source_name, &manga.url);
-    // value used when calling generateUid
-    let manga_identifier = kotatsu::correct_identifier(&source_name, &relative_url);
+impl MangaConverter {
+    fn try_from_files(mut parsers: File, extensions: File) -> std::io::Result<Self> {
+        let mut parser_list = String::new();
+        parsers.read_to_string(&mut parser_list)?;
+        let parsers: Vec<KotatsuParser> = serde_json::from_str(&parser_list)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let extensions = extensions::ExtensionList::try_from_file(extensions)?;
+        let sources = HashMap::new();
 
-    let kotatsu_manga = KotatsuMangaBackup {
-        id: get_kotatsu_id(&source_name, &manga_identifier),
-        title: manga.title.clone(),
-        alt_tile: None,
-        url: relative_url.clone(),
-        public_url: format!("{domain}{relative_url}"),
-        rating: -1.0,
-        nsfw: false,
-        cover_url: format!("{}.256.jpg", manga.thumbnail_url),
-        large_cover_url: Some(manga.thumbnail_url.clone()),
-        author: manga.author.clone(),
-        state: String::from(match manga.status {
-            1 => "ONGOING",
-            2 | 4 => "FINISHED",
-            5 => "ABANDONED",
-            6 => "PAUSED",
-            _ => "",
-        }),
-        source: source_name.clone(),
-        tags: [],
-    };
+        Ok(Self {
+            sources,
+            parsers,
+            extensions,
+            soft_match: false,
+        })
+    }
 
-    return Ok(kotatsu_manga);
+    fn with_soft_match(self, soft_match: bool) -> Self {
+        Self { soft_match, ..self }
+    }
+
+    fn get_source_name(&mut self, manga: &nekotatsu::neko::BackupManga) -> String {
+        match manga.source {
+            // Hardcoded
+            2499283573021220255 => "MANGADEX".to_owned(),
+            1998944621602463790 => "MANGAPLUSPARSER_EN".to_owned(),
+
+            id => {
+                self.sources
+                    .entry(id)
+                    .or_insert_with(|| {
+                        if let Some(source) = self.extensions.get_source(id) {
+                            let urls = vec![
+                                source
+                                    .baseUrl
+                                    .trim_start_matches("http://")
+                                    .trim_start_matches("https://")
+                                    .to_string(),
+                                source
+                                    .baseUrl
+                                    .trim_start_matches("http://")
+                                    .trim_start_matches("https://")
+                                    .trim_start_matches("www.")
+                                    .to_string(),
+                            ];
+
+                            self.parsers
+                                .iter()
+                                .find(|p| {
+                                    p.name.to_lowercase() == source.name
+                                        || p.domains.iter().any(|d| urls.iter().any(|url| d == url))
+                                })
+                                .or(self
+                                    .soft_match
+                                    .then_some({
+                                        // Boldly assuming that there's only one relevant top-level domain
+                                        let url = source
+                                            .baseUrl
+                                            .trim_start_matches("http://")
+                                            .trim_start_matches("https://");
+                                        match url.rsplit_once(".") {
+                                            Some((name, _tld)) => self.parsers.iter().find(|p| {
+                                                p.domains.iter().any(|d| d.contains(name))
+                                            }),
+                                            None => None,
+                                        }
+                                    })
+                                    .flatten())
+                                .map_or(String::from("UNKNOWN"), |p| p.name.clone())
+                        } else {
+                            String::from("UNKNOWN")
+                        }
+                    })
+                    .to_string()
+            }
+        }
+    }
+
+    fn manga_to_kotatsu(
+        &mut self,
+        manga: &nekotatsu::neko::BackupManga,
+    ) -> Option<KotatsuMangaBackup> {
+        let source_info = self.extensions.get_source(manga.source)?;
+        let domain = source_info.baseUrl;
+        let source_name = self.get_source_name(manga);
+        let relative_url = kotatsu::correct_url(&source_name, &manga.url);
+        let manga_identifier = kotatsu::correct_identifier(&source_name, &relative_url);
+
+        Some(KotatsuMangaBackup {
+            id: get_kotatsu_id(&source_name, &manga_identifier),
+            title: manga.title.clone(),
+            alt_tile: None,
+            url: relative_url.clone(),
+            public_url: format!("{domain}{relative_url}"),
+            rating: -1.0,
+            nsfw: false,
+            cover_url: format!("{}.256.jpg", manga.thumbnail_url),
+            large_cover_url: Some(manga.thumbnail_url.clone()),
+            author: manga.author.clone(),
+            state: String::from(match manga.status {
+                1 => "ONGOING",
+                2 | 4 => "FINISHED",
+                5 => "ABANDONED",
+                6 => "PAUSED",
+                _ => "",
+            }),
+            source: source_name.clone(),
+            tags: [],
+        })
+    }
 }
 
 fn decode_gzip_backup(path: &str) -> std::io::Result<Vec<u8>> {
@@ -286,6 +293,12 @@ fn neko_to_kotatsu(
     } else {
         Buffer::Vector(Vec::new())
     };
+
+    let mut converter = MangaConverter::try_from_files(
+        std::fs::File::open(&KOTATSU_PARSE_PATH.as_path())?,
+        std::fs::File::open(&TACHI_SOURCE_PATH.as_path())?,
+    )?
+    .with_soft_match(soft_match);
 
     let neko_read = decode_gzip_backup(&input_path)
         .or_else(|e| {
@@ -343,7 +356,10 @@ fn neko_to_kotatsu(
 
         // ignore locally imported manga
         if manga.source == 0 {
-            if matches!(verbosity, CommandVerbosity::Verbose | CommandVerbosity::VeryVerbose) {
+            if matches!(
+                verbosity,
+                CommandVerbosity::Verbose | CommandVerbosity::VeryVerbose
+            ) {
                 buffer.write_fmt(format_args!(
                     "[WARNING] Unable to convert '{}', local manga currently unsupported\n",
                     manga.title
@@ -353,9 +369,17 @@ fn neko_to_kotatsu(
             continue;
         }
 
-        let source = get_source(manga.source)?;
+        let source = converter
+            .extensions
+            .get_source(manga.source)
+            .unwrap_or(SourceInfo {
+                id: manga.source.to_string(),
+                ..Default::default()
+            });
         if source.name == SourceInfo::default().name {
-            if source_whitelist.len() > 0 && !source_whitelist.contains(&SourceFilterEntry::Id(manga.source)) {
+            if source_whitelist.len() > 0
+                && !source_whitelist.contains(&SourceFilterEntry::Id(manga.source))
+            {
                 ignored_manga += 1;
                 continue;
             }
@@ -382,7 +406,9 @@ fn neko_to_kotatsu(
             continue;
         }
 
-        let kotatsu_manga = manga_to_kotatsu(&manga, soft_match)?;
+        let kotatsu_manga = converter
+            .manga_to_kotatsu(&manga)
+            .expect("unknown sources should be filtered");
 
         if kotatsu_manga.source == "UNKNOWN" {
             if verbosity.should_display(errored_sources.get(&source.name).is_some()) {
