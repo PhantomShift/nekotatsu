@@ -8,7 +8,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(command) => {
             nekotatsu::run_command(command)?;
         }
-        #[cfg(not(feature="gui"))]
         None => {
             println!("Simple CLI tool that converts Neko backups into Kotatsu backups");
             println!("Run with -h for usage");

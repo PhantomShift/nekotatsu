@@ -24,11 +24,6 @@ pub mod nekotatsu {
 pub mod kotatsu;
 use kotatsu::*;
 
-#[cfg(feature = "gui")]
-pub mod child_window;
-#[cfg(feature = "gui")]
-pub mod gui;
-
 use crate::extensions::get_source;
 
 lazy_static! {
