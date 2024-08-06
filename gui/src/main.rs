@@ -7,10 +7,7 @@ use tokio;
 use nekotatsu::{CommandResult, Commands};
 
 mod application {
-    include!(env!("SLINT_INCLUDE_APPLICATION"));
-}
-mod child_window {
-    include!(env!("SLINT_INCLUDE_CHILDWINDOW"));
+    slint::include_modules!();
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -50,7 +47,7 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
             cc_handle
                 .upgrade_in_event_loop(move |app| {
                     app.set_processing(false);
-                    match child_window::ChildWindow::new() {
+                    match application::ChildWindow::new() {
                         Ok(child) => {
                             match result {
                                 Ok(result) => {
