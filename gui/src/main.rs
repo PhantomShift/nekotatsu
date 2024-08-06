@@ -1,10 +1,10 @@
 #![windows_subsystem = "windows"]
 
+use rfd;
 use slint::{self, ComponentHandle};
 use tokio;
-use rfd;
 
-use nekotatsu::{Commands, CommandResult};
+use nekotatsu::{CommandResult, Commands};
 
 mod application {
     include!(env!("SLINT_INCLUDE_APPLICATION"));
@@ -13,19 +13,17 @@ mod child_window {
     include!(env!("SLINT_INCLUDE_CHILDWINDOW"));
 }
 
-fn main() -> Result<(), Box::<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let runtime = tokio::runtime::Runtime::new()?;
 
-    runtime.block_on(async {
-        runtime.spawn_blocking(run_app_inner).await
-    })??;
+    runtime.block_on(async { runtime.spawn_blocking(run_app_inner).await })??;
 
     Ok(())
 }
 
 fn run_app_inner() -> Result<(), slint::PlatformError> {
     let app = application::Application::new()?;
-    
+
     let cc_handle = app.as_weak();
     app.on_convert_clicked(move || {
         let app = cc_handle.unwrap();
@@ -46,40 +44,46 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
                 reverse: false,
                 soft_match: false,
                 force: true,
-                print_output
+                print_output,
+                config_file: None,
             });
-            cc_handle.upgrade_in_event_loop(move |app| {
-                app.set_processing(false);
-                match child_window::ChildWindow::new() {
-                    Ok(child) => {
-                        match result {
-                            Ok(result) => {
-                                if let crate::CommandResult::Success(path, output) = result {
-                                    child.set_description(format!("Saved to '{path}'").into());
-                                    if !print_output {
-                                        child.set_lines(output.lines().count() as i32);
-                                        child.set_child_text(output.into());
-                                        child.set_init_height(app.window().size().height as i32);
+            cc_handle
+                .upgrade_in_event_loop(move |app| {
+                    app.set_processing(false);
+                    match child_window::ChildWindow::new() {
+                        Ok(child) => {
+                            match result {
+                                Ok(result) => {
+                                    if let crate::CommandResult::Success(path, output) = result {
+                                        child.set_description(format!("Saved to '{path}'").into());
+                                        if !print_output {
+                                            child.set_lines(output.lines().count() as i32);
+                                            child.set_child_text(output.into());
+                                            child
+                                                .set_init_height(app.window().size().height as i32);
+                                        }
                                     }
                                 }
-                            },
-                            Err(e) => {
-                                child.set_description(format!("Stopped with error '{}'", e.to_string()).into());
-                            }
-                        };
-                        let cc_handle = child.as_weak();
-                        child.on_close_clicked(move || {
-                            let child = cc_handle.unwrap();
-                            child.hide().unwrap();
-                        });
-                        child.window().set_position(app.window().position());
-                        child.show().unwrap();
-                    },
-                    Err(e) => {
-                        println!("Error: {e}");
+                                Err(e) => {
+                                    child.set_description(
+                                        format!("Stopped with error '{}'", e.to_string()).into(),
+                                    );
+                                }
+                            };
+                            let cc_handle = child.as_weak();
+                            child.on_close_clicked(move || {
+                                let child = cc_handle.unwrap();
+                                child.hide().unwrap();
+                            });
+                            child.window().set_position(app.window().position());
+                            child.show().unwrap();
+                        }
+                        Err(e) => {
+                            println!("Error: {e}");
+                        }
                     }
-                }
-            }).unwrap();
+                })
+                .unwrap();
         });
     });
 
@@ -94,9 +98,11 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
                 .await;
             if let Some(file_handle) = file_handle {
                 let path = file_handle.path().display().to_string();
-                ic_handle.upgrade_in_event_loop(move |app| {
-                    app.set_in_path(path.into());
-                }).unwrap();
+                ic_handle
+                    .upgrade_in_event_loop(move |app| {
+                        app.set_in_path(path.into());
+                    })
+                    .unwrap();
             }
         });
     });
@@ -111,9 +117,11 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
                 .await;
             if let Some(file_handle) = file_handle {
                 let path = file_handle.path().display().to_string();
-                oc_handle.upgrade_in_event_loop(move |app| {
-                    app.set_out_path(path.into());
-                }).unwrap();
+                oc_handle
+                    .upgrade_in_event_loop(move |app| {
+                        app.set_out_path(path.into());
+                    })
+                    .unwrap();
             }
         });
     });
@@ -125,14 +133,20 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
         app.set_processing(true);
         tokio::spawn(async move {
             let _ = nekotatsu::run_command(Commands::Update {
-                kotatsu_link: String::from("https://github.com/KotatsuApp/kotatsu-parsers/archive/refs/heads/master.zip"),
-                tachi_link: String::from("https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"),
-                force_download: false
+                kotatsu_link: String::from(
+                    "https://github.com/KotatsuApp/kotatsu-parsers/archive/refs/heads/master.zip",
+                ),
+                tachi_link: String::from(
+                    "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json",
+                ),
+                force_download: false,
             });
-            uc_handle.upgrade_in_event_loop(|app| app.set_processing(false)).unwrap();
+            uc_handle
+                .upgrade_in_event_loop(|app| app.set_processing(false))
+                .unwrap();
         });
     });
-    
+
     app.run()?;
     Ok(())
 }
