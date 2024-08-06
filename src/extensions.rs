@@ -1,8 +1,5 @@
 use serde::Deserialize;
-use std::{
-    io::{Error, Read},
-    path::PathBuf,
-};
+use std::io::Read;
 
 #[allow(non_snake_case)]
 #[derive(Debug, Deserialize, Clone)]
