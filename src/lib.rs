@@ -343,7 +343,7 @@ fn neko_to_kotatsu(
 
         // ignore locally imported manga
         if manga.source == 0 {
-            if matches!(verbosity, CommandVerbosity::Verbose) {
+            if matches!(verbosity, CommandVerbosity::Verbose | CommandVerbosity::VeryVerbose) {
                 buffer.write_fmt(format_args!(
                     "[WARNING] Unable to convert '{}', local manga currently unsupported\n",
                     manga.title
