@@ -11,8 +11,8 @@ path = "src/main.rs"
 [dependencies]
 nekotatsu = { path = ".." }
 rfd = { version = "0.14.0"}
-slint = { version = "1.6.0"}
+slint = { version = "1.7.1"}
 tokio = { version = "1.37.0", features = ["full"]}
 
 [build-dependencies]
-slint-build = "1.6.0"
+slint-build = "1.7.1"
