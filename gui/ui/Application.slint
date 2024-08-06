@@ -120,8 +120,8 @@ export component Application inherits Window {
                     if event.kind == PointerEventKind.move {
                         if self.has-hover {
                             soft-match-tooltip.visible = true;
-                            soft-match-tooltip.x = self.mouse-x;
-                            soft-match-tooltip.y = self.mouse-y;
+                            soft-match-tooltip.x = 0;
+                            soft-match-tooltip.y = self.mouse-y - soft-match-tooltip.height;
                         }
                     }
                 }
