@@ -1,4 +1,4 @@
-import { VerticalBox, Button, LineEdit, CheckBox, TextEdit, Palette } from "std-widgets.slint";
+import { VerticalBox, Button, LineEdit, CheckBox, TextEdit, Palette, StandardButton } from "std-widgets.slint";
 
 component FileButton inherits Button {
     text: "🗂️";
@@ -130,14 +130,15 @@ export component Application inherits Window {
     }
 }
 
-export component ChildWindow inherits Window {
+export component ChildWindow inherits Dialog {
     title: "Output";
     icon: @image-url("../../assets/logo.png");
 
     callback close-clicked();
 
     in property <string> child-text;
-   // for some reason viewport height isn't calculating properly, so this needs to be calculated manually
+    // for some reason viewport height isn't calculating properly, so this needs to be calculated manually
+    // note: issue only seems to occur on linux (regardless of backend)
     in property <int> lines;
     in property <string> description;
     in property <int> init-height;
@@ -156,19 +157,18 @@ export component ChildWindow inherits Window {
             viewport-height: lines * (root.default-font-size + 8px);
             visible: child-text != "";
         }
-        HorizontalLayout {
-            if output.visible : Button {
-                text: "Copy to Clipboard";
-                clicked => {
-                    output.select-all();
-                    output.copy();
-                    output.set-selection-offsets(0, 0);
-                }
-            }
-            Button {
-                text: "Close";
-                clicked => { close-clicked() }
-            }
+    }
+    StandardButton {
+        kind: StandardButtonKind.close; 
+        clicked => { close-clicked(); }
+    }
+    Button {
+        text: "Copy to Clipboard";
+        dialog-button-role: action;
+        clicked => {
+            output.select-all();
+            output.copy();
+            output.set-selection-offsets(0, 0);
         }
     }
 }
