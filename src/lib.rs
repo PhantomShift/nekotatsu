@@ -114,6 +114,7 @@ pub enum Commands {
     Delete,
 }
 
+#[derive(Debug)]
 pub enum CommandVerbosity {
     None,
     Verbose,
@@ -130,6 +131,7 @@ impl CommandVerbosity {
     }
 }
 
+#[derive(Debug)]
 pub enum CommandResult {
     None,
     Success(String, String),
@@ -149,6 +151,7 @@ impl Buffer {
     }
 }
 
+#[derive(Debug)]
 pub struct MangaConverter {
     sources: HashMap<i64, String>,
     parsers: Vec<KotatsuParser>,

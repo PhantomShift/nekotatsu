@@ -34,6 +34,7 @@ pub struct ExtensionInfo {
     pub sources: Vec<SourceInfo>,
 }
 
+#[derive(Debug)]
 pub struct ExtensionList {
     inner: Vec<ExtensionInfo>,
 }
