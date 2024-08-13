@@ -39,7 +39,17 @@ pub struct ExtensionList {
     inner: Vec<ExtensionInfo>,
 }
 
+impl Default for ExtensionList {
+    fn default() -> Self {
+        Self { inner: Vec::new() }
+    }
+}
+
 impl ExtensionList {
+    pub fn new(list: Vec<ExtensionInfo>) -> Self {
+        Self { inner: list }
+    }
+
     pub fn try_from_file(mut file: std::fs::File) -> std::io::Result<Self> {
         let mut extensions = String::new();
         file.read_to_string(&mut extensions)?;

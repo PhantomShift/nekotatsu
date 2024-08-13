@@ -4,7 +4,7 @@ use rfd;
 use slint::{self, ComponentHandle};
 use tokio;
 
-use nekotatsu::{CommandResult, Commands};
+use nekotatsu::command::{self, CommandResult, Commands};
 
 mod application {
     slint::include_modules!();
@@ -32,7 +32,7 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
         let cc_handle = app.as_weak();
         app.set_processing(true);
         tokio::spawn(async move {
-            let result = nekotatsu::run_command(Commands::Convert {
+            let result = command::run_command(Commands::Convert {
                 input,
                 output,
                 favorites_name,
@@ -129,7 +129,7 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
         let uc_handle = app.as_weak();
         app.set_processing(true);
         tokio::spawn(async move {
-            let _ = nekotatsu::run_command(Commands::Update {
+            let _ = command::run_command(Commands::Update {
                 kotatsu_link: String::from(
                     "https://github.com/KotatsuApp/kotatsu-parsers/archive/refs/heads/master.zip",
                 ),
