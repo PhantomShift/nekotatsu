@@ -398,10 +398,11 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
             let kotatsu_path = data_path.join("kotatsu-parsers.zip");
             if force_download || !kotatsu_path.try_exists()? {
                 let response = reqwest::blocking::get(kotatsu_link);
-                if let Ok(mut response) = response {
-                    let mut buf = Vec::new();
-                    let _ = response.copy_to(&mut buf);
-                    std::fs::write(kotatsu_path.as_path(), buf)?;
+                if let Ok(response) = response {
+                    let b = response
+                        .bytes()
+                        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                    std::fs::write(kotatsu_path.as_path(), b)?;
                     println!("Successfully downloaded parser repo.");
                 } else {
                     println!("Failed to download parser repo.");
