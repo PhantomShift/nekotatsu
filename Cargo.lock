@@ -3000,7 +3000,6 @@ dependencies = [
  "clap",
  "directories",
  "flate2",
- "lazy_static",
  "prost",
  "regex",
  "reqwest",

@@ -1,9 +1,9 @@
 use std::{
     fs::File,
     io::{BufReader, Cursor, Read, Write},
+    sync::LazyLock,
 };
 
-use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use zip::ZipArchive;
@@ -38,20 +38,21 @@ impl DomainCaptureMethod {
     }
 }
 
-lazy_static! {
-    static ref PARSER_CAPTURE: Regex = Regex::new(r#"@MangaSourceParser\(.(?P<name>\w*)., .(?P<title>[\w\s\(\)]+).(, .(?P<locale>\w*).(, (?P<type>[\w\.]+))?)?"#).unwrap();
-    // static ref DOMAIN_CAPTURE_CUSTOM: Regex = Regex::new(r#"\w+Parser\(context, MangaSource\.\w+, .(?P<domain>[\w\.\-]+)."#).unwrap();
-    // static ref DOMAIN_CAPTURE: Regex = Regex::new(r#"ConfigKey\.Domain\((?P<domains>.+)\)"#).unwrap();
-    static ref DOMAIN_CAPTURE_METHODS: Vec<DomainCaptureMethod> = vec![
-        DomainCaptureMethod::Multiple(regex::RegexBuilder::new(r#"ConfigKey\.Domain\((?P<domains>.+?)\)"#)
-            .dot_matches_new_line(true)
-            .build()
-            .unwrap()),
-        DomainCaptureMethod::Single(Regex::new(r#"\w+\(\s*context,\s*\w+Source\.\w+,\s*"(?P<domain>[\w\.\-/]+)""#).unwrap()),
-        DomainCaptureMethod::Single(Regex::new(r#"\(\s*context,\s*MangaSource\.\w+,\s*.(?P<domain>[\w\.\-/]+)."#).unwrap()),
-        DomainCaptureMethod::Single(Regex::new(r#"\w+\(\s*context = context,\s*source = \w+.\w+,\s*(siteId = \d+,\s*)?siteDomain = "(?P<domain>[\w\.\-/]+)""#).unwrap())
-    ];
-}
+static PARSER_CAPTURE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"@MangaSourceParser\(.(?P<name>\w*)., .(?P<title>[\w\s\(\)]+).(, .(?P<locale>\w*).(, (?P<type>[\w\.]+))?)?"#).unwrap()
+});
+
+static DOMAIN_CAPTURE_METHODS: LazyLock<Vec<DomainCaptureMethod>> = LazyLock::new(|| {
+    vec![
+    DomainCaptureMethod::Multiple(regex::RegexBuilder::new(r#"ConfigKey\.Domain\((?P<domains>.+?)\)"#)
+        .dot_matches_new_line(true)
+        .build()
+        .unwrap()),
+    DomainCaptureMethod::Single(Regex::new(r#"\w+\(\s*context,\s*\w+Source\.\w+,\s*"(?P<domain>[\w\.\-/]+)""#).unwrap()),
+    DomainCaptureMethod::Single(Regex::new(r#"\(\s*context,\s*MangaSource\.\w+,\s*.(?P<domain>[\w\.\-/]+)."#).unwrap()),
+    DomainCaptureMethod::Single(Regex::new(r#"\w+\(\s*context = context,\s*source = \w+.\w+,\s*(siteId = \d+,\s*)?siteDomain = "(?P<domain>[\w\.\-/]+)""#).unwrap())
+]
+});
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct KotatsuMangaBackup {

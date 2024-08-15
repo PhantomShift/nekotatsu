@@ -1,25 +1,23 @@
 use clap::{Parser, Subcommand};
 use directories::ProjectDirs;
 use flate2::{write::GzEncoder, Compression};
-use lazy_static::lazy_static;
 use prost::Message;
 use std::{
     collections::HashMap,
     io::{self, Write},
     path::PathBuf,
+    sync::LazyLock,
 };
 
 use crate::config::SourceFilterList;
 use crate::*;
 
-lazy_static! {
-    static ref PROJECT_DIR: ProjectDirs =
-        ProjectDirs::from("", "", "Nekotatsu").expect("Invalid application directories generated");
-    static ref DEFAULT_TACHI_SOURCE_PATH: PathBuf =
-        PathBuf::from(PROJECT_DIR.data_dir()).join("tachi_sources.json");
-    static ref DEFAULT_KOTATSU_PARSE_PATH: PathBuf =
-        PathBuf::from(PROJECT_DIR.data_dir()).join("kotatsu_parsers.json");
-}
+static PROJECT_DIR: LazyLock<ProjectDirs> =
+    LazyLock::new(|| ProjectDirs::from("", "", "Nekotatsu").expect("home directory should exist"));
+static DEFAULT_TACHI_SOURCE_PATH: LazyLock<PathBuf> =
+    LazyLock::new(|| PROJECT_DIR.data_dir().join("tachi_sources.json").into());
+static DEFAULT_KOTATSU_PARSE_PATH: LazyLock<PathBuf> =
+    LazyLock::new(|| PROJECT_DIR.data_dir().join("kotatsu_parsers.json").into());
 
 /// Simple CLI tool that converts Neko backups into Kotatsu backups
 #[derive(Debug, Parser)]
