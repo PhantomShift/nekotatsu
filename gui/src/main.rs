@@ -128,7 +128,7 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
         let app = uc_handle.unwrap();
         let uc_handle = app.as_weak();
         app.set_processing(true);
-        tokio::spawn(async move {
+        tokio::task::spawn_blocking(move || {
             let _ = command::run_command(Commands::Update {
                 kotatsu_link: String::from(
                     "https://github.com/KotatsuApp/kotatsu-parsers/archive/refs/heads/master.zip",
