@@ -410,7 +410,10 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
                 }
             }
 
-            kotatsu::update_parsers(kotatsu_path.as_path(), &DEFAULT_KOTATSU_PARSE_PATH)?;
+            let new_data = std::fs::File::open(&kotatsu_path)?;
+            let save_to = std::fs::File::create(&DEFAULT_KOTATSU_PARSE_PATH.as_path())?;
+
+            kotatsu::update_parsers(&new_data, &save_to)?;
             println!("Successfully updated parser info.");
 
             Ok(CommandResult::None)

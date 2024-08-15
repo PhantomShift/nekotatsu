@@ -1,6 +1,6 @@
 use std::{
-    io::{Cursor, Read},
-    path::Path,
+    fs::File,
+    io::{BufReader, Cursor, Read, Write},
 };
 
 use lazy_static::lazy_static;
@@ -217,10 +217,10 @@ fn get_parser_definitions(
     Ok(files)
 }
 
-// TODO: Allow taking in arbitrary File handlers
-pub fn update_parsers(path: &Path, save_path: &Path) -> std::io::Result<()> {
+pub fn update_parsers(new: &File, mut save_to: &File) -> std::io::Result<()> {
+    let reader = BufReader::new(new);
     let bytes = Cursor::new(
-        std::fs::File::open(path)?
+        reader
             .bytes()
             .collect::<Result<Vec<u8>, std::io::Error>>()?,
     );
@@ -262,9 +262,8 @@ pub fn update_parsers(path: &Path, save_path: &Path) -> std::io::Result<()> {
             parsers.push(parser);
         }
     }
-    // let to_store = serde_json::to_string_pretty(&parsers)?;
-    let to_store = serde_json::to_string(&parsers)?;
-    std::fs::write(save_path, &to_store)?;
+
+    save_to.write(&mut serde_json::to_vec(&parsers)?)?;
 
     Ok(())
 }
