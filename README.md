@@ -19,6 +19,35 @@ to turn your backup into a zip file that Kotatsu can parse. Get this zip file on
 
 If you don't plan on using the tool again any time soon, make sure to run `nekotatsu clear` to remove any files nekotatsu downloaded/generated from `nekotatsu update`.
 
+## Whitelisting/Blacklisting
+
+You may choose to filter which manga get converted with either a blacklist or a whitelist.
+To make use of this, create a toml file, i.e. `nekotatsu.toml`, and populate it with an entry
+named `whitelist` or `blacklist` which contains an array of source names, source URLs or source IDs.
+
+```toml
+# Example: only convert manga in your backup that came from mangadex
+whitelist = [
+    "mangadex"
+]
+```
+
+```toml
+# Example: convert all manga in your backup except for ones from this ID and URL.
+blacklist = [
+    2499283573021220255, # MangaDex's ID
+    "www.webtoons.com"
+]
+```
+
+You can then use this config by adding the `--config <FILE>` option, for example,
+
+```bash
+nekotatsu convert my_backup.tachibk --config nekotatsu.toml
+```
+
+## CLI Help
+
 Run the commands with `--help` to view these messages.
 
 ```
