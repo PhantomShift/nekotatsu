@@ -32,30 +32,30 @@ jobs:
             command: both
             args: "--locked --release"
           
-          - release_for: Linux-GNU-x86_64 (GUI)
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            bin: nekotatsu-gui
-            name: nekotatsu-gui-${{github.ref_name}}-Linux-GNU-x86_64.tar.gz
-            command: build
-            working-directory: gui
-            args: "--locked --release --package gui"
+          # - release_for: Linux-GNU-x86_64 (GUI)
+          #   os: ubuntu-latest
+          #   target: x86_64-unknown-linux-gnu
+          #   bin: nekotatsu-gui
+          #   name: nekotatsu-gui-${{github.ref_name}}-Linux-GNU-x86_64.tar.gz
+          #   command: build
+          #   working-directory: gui
+          #   args: "--locked --release --package gui"
           
-          - release_for: Windows-x86_64 (GUI)
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-            bin: nekotatsu.exe
-            name: nekotatsu-${{github.ref_name}}-Windows-x86_64.zip
-            command: both
-            args: "--locked --release --package gui"
+          # - release_for: Windows-x86_64 (GUI)
+          #   os: windows-latest
+          #   target: x86_64-pc-windows-msvc
+          #   bin: nekotatsu.exe
+          #   name: nekotatsu-${{github.ref_name}}-Windows-x86_64.zip
+          #   command: both
+          #   args: "--locked --release --package gui"
 
-          - release_for: macOS-aarch64 (GUI)
-            os: macOS-latest
-            target: aarch64-apple-darwin
-            bin: nekotatsu
-            name: nekotatsu-${{github.ref_name}}-Darwin-aarch64.tar.gz
-            command: both
-            args: "--locked --release --package gui"
+          # - release_for: macOS-aarch64 (GUI)
+          #   os: macOS-latest
+          #   target: aarch64-apple-darwin
+          #   bin: nekotatsu
+          #   name: nekotatsu-${{github.ref_name}}-Darwin-aarch64.tar.gz
+          #   command: both
+          #   args: "--locked --release --package gui"
 
 
     runs-on: ${{ matrix.platform.os }}
