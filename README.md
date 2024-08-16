@@ -40,10 +40,10 @@ blacklist = [
 ]
 ```
 
-You can then use this config by adding the `--config <FILE>` option, for example,
+You can then use this config by adding the `--config-file <FILE>` option, for example,
 
 ```bash
-nekotatsu convert my_backup.tachibk --config nekotatsu.toml
+nekotatsu convert my_backup.tachibk --config-file nekotatsu.toml
 ```
 
 ## CLI Help
