@@ -43,11 +43,11 @@ pub enum Commands {
         #[arg(alias("fn"), long, default_value_t = String::from("Library"))]
         favorites_name: String,
 
-        /// Display some additional information. Overrides verbose option.
+        /// Display some additional information
         #[arg(short, long)]
         verbose: bool,
 
-        /// Display all debug information
+        /// Display all debug information; overrides verbose option
         #[arg(short('V'), long)]
         very_verbose: bool,
 
