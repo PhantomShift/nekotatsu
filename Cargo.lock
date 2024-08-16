@@ -3000,9 +3000,23 @@ dependencies = [
  "clap",
  "directories",
  "flate2",
+ "nekotatsu-core",
  "prost",
  "regex",
  "reqwest",
+ "serde",
+ "serde_json",
+ "toml",
+ "zip",
+]
+
+[[package]]
+name = "nekotatsu-core"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "prost",
+ "regex",
  "serde",
  "serde_json",
  "toml",

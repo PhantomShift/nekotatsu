@@ -1,0 +1,13 @@
+[package]
+name = "nekotatsu-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+flate2 = "1.0.28"
+prost = "0.12.1"
+regex = "1.10.2"
+serde = { version = "1.0.190", features = ["derive"] }
+serde_json = "1.0.108"
+zip = { version = "0.6.6", features = ["deflate-zlib"] }
+toml = "0.8.19"

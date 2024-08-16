@@ -1,32 +1,32 @@
 use clap::{Parser, Subcommand};
-use regex::Regex;
 use lazy_static::lazy_static;
+use regex::Regex;
 
 /// Tools for working with proto files
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
 struct Args {
     #[command(subcommand)]
-    commands: Commands
+    commands: Commands,
 }
 
 #[derive(Debug, Subcommand)]
 enum Commands {
     /// Compile proto files into Rust files
     Compile,
-    
+
     /// Generate proto files from Kotlin definitions
     #[command(visible_alias = "gen")]
     Generate {
         input: std::path::PathBuf,
 
-        #[arg(default_value_t = format!("{}/../src/neko.proto", env!("CARGO_MANIFEST_DIR")))]
+        #[arg(default_value_t = format!("{}/../nekotatsu-core/src/neko.proto", env!("CARGO_MANIFEST_DIR")))]
         output: String,
-    }
+    },
 }
 
 fn compile_proto() {
-    let src_dir = format!("{}/../src", env!("CARGO_MANIFEST_DIR"));
+    let src_dir = format!("{}/../nekotatsu-core/src", env!("CARGO_MANIFEST_DIR"));
 
     std::env::set_var("OUT_DIR", &src_dir);
     prost_build::compile_protos(&[src_dir.clone() + "/neko.proto"], &[&src_dir]).unwrap();
@@ -51,11 +51,17 @@ fn generate_proto(input: std::path::PathBuf, output: String) {
             while let Some(captures) = GENERAL_REGEX.captures_at(&read, index) {
                 let class_name = captures.name("class_name").unwrap().as_str();
                 let matched = captures.get(0).unwrap();
-                
-                let fields = FIELD_REGEX.find_iter(&matched.as_str())
+
+                let fields = FIELD_REGEX
+                    .find_iter(&matched.as_str())
                     .map(|matched| {
-                        let captures = FIELD_REGEX.captures(matched.as_str()).expect("should only match if captured");
-                        let tag_number = captures.name("tag_number").expect("tag_number should match").as_str();
+                        let captures = FIELD_REGEX
+                            .captures(matched.as_str())
+                            .expect("should only match if captured");
+                        let tag_number = captures
+                            .name("tag_number")
+                            .expect("tag_number should match")
+                            .as_str();
                         let name = captures.name("name").expect("name should match").as_str();
                         let var_type = captures.name("type").expect("type should match").as_str();
                         let list_type = captures.name("list_type");
@@ -70,14 +76,18 @@ fn generate_proto(input: std::path::PathBuf, output: String) {
                                 ""
                             },
                             converted_type = {
-                                let var_type = if let Some(t) = list_type {t.as_str()} else {var_type};
+                                let var_type = if let Some(t) = list_type {
+                                    t.as_str()
+                                } else {
+                                    var_type
+                                };
                                 match var_type {
                                     "String" => "string",
                                     "Int" => "int32",
                                     "Long" => "int64",
                                     "Float" => "float",
                                     "Boolean" => "bool",
-                                    _ => var_type
+                                    _ => var_type,
                                 }
                             }
                         )

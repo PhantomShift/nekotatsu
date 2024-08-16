@@ -9,8 +9,9 @@ use std::{
     sync::LazyLock,
 };
 
-use crate::config::SourceFilterList;
-use crate::*;
+use crate::nekotatsu_core::config::SourceFilterList;
+use crate::nekotatsu_core::kotatsu::{self, *};
+use crate::nekotatsu_core::*;
 
 static PROJECT_DIR: LazyLock<ProjectDirs> =
     LazyLock::new(|| ProjectDirs::from("", "", "Nekotatsu").expect("home directory should exist"));
