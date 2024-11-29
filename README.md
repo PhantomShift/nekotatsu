@@ -1,6 +1,8 @@
 # Nekotatsu
 Simple CLI tool that converts (specifically for) [Neko](https://github.com/CarlosEsco/Neko) backups (.proto.gz) into [Kotatsu](https://github.com/KotatsuApp/Kotatsu)'s backup format (zipped json). *There is limited support for other forks, however I cannot guarantee that they will work as intended.*
 
+> See [nekotatsu-mobile](https://github.com/PhantomShift/nekotatsu-mobile) for a version usable on Android devices.
+
 ## Instructions
 Note that **before you can use nekotatsu for converting**, updated lists of Tachiyomi extensions and Kotatsu parsers are necessary to map from one to the other.
 Before attempting to do any converting, run the following command
