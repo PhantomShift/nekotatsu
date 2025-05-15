@@ -61,7 +61,7 @@ jobs:
     runs-on: ${{ matrix.platform.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v0
@@ -81,14 +81,18 @@ jobs:
           fi
           cd -
       - name: Publish release artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform.bin }}-${{ matrix.platform.os_name }}
-          path: "nekotatsu-*"
+          path: |
+            nekotatsu-*
+            !nekotatsu-core
       - name: Generate SHA-256
         run: shasum -a 256 ${{ matrix.platform.name }}
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           draft: true
-          files: "nekotatsu-*"
+          files: |
+            nekotatsu-*
+            !nekotatsu-core
