@@ -83,7 +83,7 @@ jobs:
       - name: Publish release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform.bin }}-${{ matrix.platform.os_name }}
+          name: ${{ matrix.platform.bin }}-${{ matrix.platform.os }}-${{ github.ref_name }}
           path: |
             nekotatsu-*
             !nekotatsu-core
