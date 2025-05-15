@@ -179,10 +179,24 @@ pub fn correct_identifier(source_name: &str, identifier: &str) -> String {
     }
 }
 /// Correct urls for known sources; leaves alone if not implemented
-pub fn correct_url(source_name: &str, url: &str) -> String {
+pub fn correct_relative_url(source_name: &str, url: &str) -> String {
     match source_name {
         "MANGADEX" => url.replace("/manga/", "/title/"),
+        "WEEBCENTRAL" => {
+            // Apparently they use just their manga id for the
+            // relative url in their Kotatsu parser
+            let url = url.replace("/series/", "");
+            url.split_once("/").map(|(id, _name)| {
+                id.to_string()
+            }).unwrap_or(url)
+        }
         _ => url.to_string(),
+    }
+}
+pub fn correct_public_url(source_name: &str, domain: &str, relative_fragment: &str) -> String {
+    match source_name {
+        "WEEBCENTRAL" => format!("{domain}/series{relative_fragment}"),
+        _ => format!("{domain}{relative_fragment}")
     }
 }
 

@@ -166,7 +166,7 @@ impl MangaConverter {
         let source_info = self.extensions.get_source(manga.source)?;
         let domain = source_info.baseUrl;
         let source_name = self.get_source_name(manga);
-        let relative_url = kotatsu::correct_url(&source_name, &manga.url);
+        let relative_url = kotatsu::correct_relative_url(&source_name, &manga.url);
         let manga_identifier = kotatsu::correct_identifier(&source_name, &relative_url);
 
         Some(KotatsuMangaBackup {
@@ -174,7 +174,7 @@ impl MangaConverter {
             title: manga.title.clone(),
             alt_tile: None,
             url: relative_url.clone(),
-            public_url: format!("{domain}{relative_url}"),
+            public_url: kotatsu::correct_public_url(&source_name, &domain, &relative_url),
             rating: -1.0,
             nsfw: false,
             cover_url: format!("{}.256.jpg", manga.thumbnail_url),
