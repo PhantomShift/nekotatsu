@@ -177,7 +177,7 @@ impl MangaConverter {
             public_url: kotatsu::correct_public_url(&source_name, &domain, &relative_url),
             rating: -1.0,
             nsfw: false,
-            cover_url: format!("{}.256.jpg", manga.thumbnail_url),
+            cover_url: manga.thumbnail_url.clone(),
             large_cover_url: Some(manga.thumbnail_url.clone()),
             author: manga.author.clone(),
             state: String::from(match manga.status {
