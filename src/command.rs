@@ -490,11 +490,11 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
 
             println!("Manga:");
             for entry in backup.backup_manga.iter() {
-                println!("{entry:?}");
+                println!("{entry:#?}");
             }
             println!("Categories:");
             for entry in backup.backup_categories.iter() {
-                println!("{entry:?}")
+                println!("{entry:#?}")
             }
 
             Ok(CommandResult::None)
