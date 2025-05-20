@@ -91,10 +91,27 @@ pub struct KotatsuCategoryBackup {
     pub created_at: i64,
     pub sort_key: i32,
     pub title: String,
-    pub order: Option<String>,
+    pub order: Option<KotatsuListSortOrder>,
     pub track: Option<bool>,
     pub show_in_lib: Option<bool>,
     pub deleted_at: i64,
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Serialize, Deserialize)]
+pub enum KotatsuListSortOrder {
+    NEWEST,
+    OLDEST,
+    PROGRESS,
+    UNREAD,
+    ALPHABETIC,
+    ALPHABETIC_REVERSE,
+    RATING,
+    RELEVANCE,
+    NEW_CHAPTERS,
+    LAST_READ,
+    LONG_AGO_READ,
+    UPDATED,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

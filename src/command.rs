@@ -429,6 +429,7 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
             force,
             print_output,
             config_file,
+            // TODO: Category sorting method override, automatically detect if it should use default from filename
         } => {
             let conf = match config_file {
                 Some(path) => {

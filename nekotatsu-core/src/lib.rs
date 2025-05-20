@@ -35,6 +35,96 @@ pub trait Logger {
     }
 }
 
+/// Note that at the time of writing, mainline Mihon actually
+/// does not save sortting method for their categories,
+/// which is why the default implementation exists for now.
+#[derive(Debug)]
+pub enum CategorySortType {
+    Default,
+    /// AKA old, classic method, see https://github.com/Jays2Kings/tachiyomiJ2K/blob/master/app/src/main/java/eu/kanade/tachiyomi/ui/library/LibrarySort.kt
+    J2K,
+    // Method used by mainline Mihon, see https://github.com/mihonapp/mihon/blob/main/domain/src/main/java/tachiyomi/domain/library/model/LibrarySortMode.kt
+    // Mainline,
+}
+
+#[repr(i32)]
+#[derive(Clone, Copy)]
+pub enum J2KMangaSort {
+    TitleAscending = 'a' as i32 + 0 * 2,
+    TitleDescending = 'b' as i32 + 0 * 2,
+    LastReadAscending = 'a' as i32 + 1 * 2,
+    LastReadDescending = 'b' as i32 + 1 * 2,
+    LatestChapterAscending = 'a' as i32 + 2 * 2,
+    LatestChapterDescending = 'b' as i32 + 2 * 2,
+    UnreadAscending = 'a' as i32 + 3 * 2,
+    UnreadDescending = 'b' as i32 + 3 * 2,
+    TotalChaptersAscending = 'a' as i32 + 4 * 2,
+    TotalChaptersDescending = 'b' as i32 + 4 * 2,
+    DateAddedAscending = 'a' as i32 + 5 * 2,
+    DateAddedDescending = 'b' as i32 + 5 * 2,
+    DateFetchedAscending = 'a' as i32 + 6 * 2,
+    DateFetchedDescending = 'b' as i32 + 6 * 2,
+    DragAndDropAscending = 'a' as i32 + 7 * 2,
+    DragAndDropDescending = 'b' as i32 + 7 * 2,
+}
+
+impl TryFrom<i32> for J2KMangaSort {
+    type Error = &'static str;
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        const RANGE: std::ops::RangeInclusive<i32> =
+            J2KMangaSort::TitleAscending as i32..=J2KMangaSort::DragAndDropDescending as i32;
+
+        if !RANGE.contains(&value) {
+            return Err("not in range");
+        }
+        // Safety: value is always within range
+        Ok(unsafe { std::mem::transmute(value) })
+    }
+}
+
+impl CategorySortType {
+    // Separated flags are currently either unclear to me
+    // or do not have a corresponding sorting type in Kotatsu
+    // Kotatsu default is "NEWEST"
+    // See https://github.com/KotatsuApp/kotatsu-parsers/blob/master/src/main/kotlin/org/koitharu/kotatsu/parsers/model/SortOrder.kt
+    fn convert(&self, id: i32) -> KotatsuListSortOrder {
+        use KotatsuListSortOrder as SortOrder;
+
+        match *self {
+            Self::Default => SortOrder::NEWEST,
+            Self::J2K => {
+                use J2KMangaSort::*;
+                match id.try_into() {
+                    Ok(manga_sort) => match manga_sort {
+                        TitleAscending => SortOrder::ALPHABETIC,
+                        TitleDescending => SortOrder::ALPHABETIC_REVERSE,
+                        LastReadAscending => SortOrder::LAST_READ,
+                        LastReadDescending => SortOrder::LONG_AGO_READ,
+                        LatestChapterAscending => SortOrder::UPDATED,
+                        // Approximation
+                        LatestChapterDescending => SortOrder::OLDEST,
+                        UnreadAscending => SortOrder::NEW_CHAPTERS,
+                        // Approximation
+                        UnreadDescending => SortOrder::PROGRESS,
+                        DateAddedAscending => SortOrder::NEWEST,
+                        DateAddedDescending => SortOrder::OLDEST,
+                        // Approximation
+                        DateFetchedAscending => SortOrder::UPDATED,
+                        // Approximation
+                        DateFetchedDescending => SortOrder::OLDEST,
+
+                        TotalChaptersAscending => SortOrder::NEWEST,
+                        TotalChaptersDescending => SortOrder::NEWEST,
+                        DragAndDropAscending => SortOrder::NEWEST,
+                        DragAndDropDescending => SortOrder::NEWEST,
+                    },
+                    Err(_) => SortOrder::NEWEST,
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct MangaConverter {
     sources: HashMap<i64, String>,
@@ -42,6 +132,7 @@ pub struct MangaConverter {
     pub extensions: extensions::ExtensionList,
 
     soft_match: bool,
+    category_sort_type: CategorySortType,
 }
 
 pub struct MangaConversionResult {
@@ -64,6 +155,7 @@ impl MangaConverter {
             parsers: Vec::new(),
             extensions: extensions::ExtensionList::default(),
             soft_match: false,
+            category_sort_type: CategorySortType::J2K,
         }
     }
 
@@ -82,6 +174,13 @@ impl MangaConverter {
     pub fn with_soft_match(self, enabled: bool) -> Self {
         Self {
             soft_match: enabled,
+            ..self
+        }
+    }
+
+    pub fn with_category_sort_type(self, category_sort_type: CategorySortType) -> Self {
+        Self {
+            category_sort_type,
             ..self
         }
     }
@@ -214,25 +313,26 @@ impl MangaConverter {
             created_at: 0,
             sort_key: 0,
             title: favorites_name.into(),
-            order: Some("NAME".into()),
+            order: Some(KotatsuListSortOrder::ALPHABETIC),
             track: Some(true),
             show_in_lib: Some(true),
             deleted_at: 0,
         });
-        result_categories.extend(backup.backup_categories.iter().enumerate().map(
-            |(id, category)| KotatsuCategoryBackup {
-                category_id: id as i64 + CATEGORY_OFFSET,
+        result_categories.extend(backup.backup_categories.iter().map(|category| {
+            KotatsuCategoryBackup {
+                // Non-Mihon forks currently use the "order" as the identifier
+                category_id: category.id.unwrap_or(category.order) as i64 + CATEGORY_OFFSET,
                 created_at: 0,
                 sort_key: category.order,
                 title: category.name.clone(),
-                order: None,
-                // TODO: convert flags
-                // see https://github.com/mihonapp/mihon/blob/main/domain/src/main/java/tachiyomi/domain/library/model/LibrarySortMode.kt
+                order: category
+                    .manga_sort
+                    .map(|manga_sort| self.category_sort_type.convert(manga_sort)),
                 track: None,
                 show_in_lib: Some(true),
                 deleted_at: 0,
-            },
-        ));
+            }
+        }));
 
         for manga in backup.backup_manga.iter() {
             if manga.source == 0 {

@@ -162,10 +162,16 @@ pub struct BackupCategory {
     pub name: ::prost::alloc::string::String,
     #[prost(int32, tag = "2")]
     pub order: i32,
-    #[prost(int32, tag = "3")]
-    pub update_interval: i32,
+    /// Manual change: no modern versions use this for updateInterval
+    /// Meanwhile, mainline Mihon uses this for category ID
+    /// int32 updateInterval = 3;
+    #[prost(int32, optional, tag = "3")]
+    pub id: ::core::option::Option<i32>,
     #[prost(int32, tag = "100")]
     pub flags: i32,
+    /// Manual change: J2K-based forks use this for sort order
+    #[prost(int32, optional, tag = "800")]
+    pub manga_sort: ::core::option::Option<i32>,
 }
 /// DirEntry("NekoModels/Backup.kt")
 #[allow(clippy::derive_partial_eq_without_eq)]

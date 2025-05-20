@@ -95,8 +95,14 @@ message BackupChapter {
 message BackupCategory {
     string name = 1;
     int32 order = 2;
-    int32 updateInterval = 3;
+    // Manual change: no modern versions use this for updateInterval
+    // Meanwhile, mainline Mihon uses this for category ID
+    // int32 updateInterval = 3;
+    optional int32 id = 3;
     int32 flags = 100;
+    
+    // Manual change: J2K-based forks use this for sort order
+    optional int32 mangaSort = 800;
 }
 
 // DirEntry("NekoModels/Backup.kt")
