@@ -1,3 +1,5 @@
+--!nolint FunctionUnused
+
 local GUYA_PARSERS = {
 	DANKE = true,
 	GUYACUBARI = true,
