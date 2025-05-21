@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use directories::ProjectDirs;
+use etcetera::{app_strategy::AppStrategy, AppStrategyArgs};
 use flate2::{write::GzEncoder, Compression};
 use prost::Message;
 use std::{
@@ -13,12 +13,25 @@ use crate::nekotatsu_core::config::SourceFilterList;
 use crate::nekotatsu_core::kotatsu::{self, *};
 use crate::nekotatsu_core::*;
 
-static PROJECT_DIR: LazyLock<ProjectDirs> =
-    LazyLock::new(|| ProjectDirs::from("", "", "Nekotatsu").expect("home directory should exist"));
+#[cfg(target_os = "windows")]
+type AppPathStrategy = etcetera::app_strategy::Windows;
+#[cfg(target_os = "macos")]
+type AppPathStrategy = etcetera::app_strategy::Apple;
+#[cfg(not(target_os = "windows"))]
+#[cfg(not(target_os = "macos"))]
+type AppPathStrategy = etcetera::app_strategy::Xdg;
+
+static APP_PATH: LazyLock<AppPathStrategy> = LazyLock::new(|| {
+    etcetera::app_strategy::choose_native_strategy(AppStrategyArgs {
+        app_name: "Nekotatsu".to_string(),
+        ..Default::default()
+    })
+    .expect("application paths should be findable on all used platforms")
+});
 static DEFAULT_TACHI_SOURCE_PATH: LazyLock<PathBuf> =
-    LazyLock::new(|| PROJECT_DIR.data_dir().join("tachi_sources.json").into());
+    LazyLock::new(|| APP_PATH.data_dir().join("tachi_sources.json"));
 static DEFAULT_KOTATSU_PARSE_PATH: LazyLock<PathBuf> =
-    LazyLock::new(|| PROJECT_DIR.data_dir().join("kotatsu_parsers.json").into());
+    LazyLock::new(|| APP_PATH.data_dir().join("kotatsu_parsers.json"));
 
 /// Simple CLI tool that converts Neko backups into Kotatsu backups
 #[derive(Debug, Parser)]
@@ -377,7 +390,7 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
             tachi_link,
             force_download,
         } => {
-            let data_path = PathBuf::from(PROJECT_DIR.data_dir());
+            let data_path = APP_PATH.data_dir();
             if !data_path.try_exists()? {
                 std::fs::create_dir_all(&data_path)?;
             }
@@ -502,16 +515,15 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
         }
 
         Commands::Clear | Commands::Delete => {
-            #[cfg(not(target_os = "windows"))]
-            let path = PROJECT_DIR.data_dir();
+            let path = APP_PATH.data_dir();
             #[cfg(target_os = "windows")]
-            let path = PROJECT_DIR.data_dir().parent().ok_or(std::io::Error::new(
+            let path = path.parent().ok_or(std::io::Error::new(
                 io::ErrorKind::Other,
                 "Unable to get Nekotatsu data folder path",
             ))?;
 
             if path.try_exists()? {
-                std::fs::remove_dir_all(path)?;
+                std::fs::remove_dir_all(&path)?;
                 println!("Deleted directory `{}`", path.display());
             } else {
                 println!("Data does not exist/is already deleted.")
