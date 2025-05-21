@@ -155,7 +155,7 @@ fn neko_to_kotatsu_command(
     );
 
     let to_make = std::fs::File::create(output_path.clone())?;
-    let options = zip::write::FileOptions::default();
+    let options = zip::write::FileOptions::<()>::default();
     let mut writer = zip::ZipWriter::new(to_make);
     for (name, entry) in [
         ("history", serde_json::to_string_pretty(&result.history)),

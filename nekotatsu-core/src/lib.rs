@@ -15,6 +15,7 @@ pub mod nekotatsu {
     }
 }
 pub mod kotatsu;
+pub mod script_interface;
 use kotatsu::*;
 
 const CATEGORY_DEFAULT: i64 = 2;
@@ -33,6 +34,13 @@ pub trait Logger {
     fn capture_output(&mut self) -> String {
         String::new()
     }
+}
+
+#[derive(Debug)]
+pub enum ConversionError {
+    URLCheckError(String),
+    URLParseError(url::ParseError),
+    ScriptError(script_interface::Error),
 }
 
 /// Note that at the time of writing, mainline Mihon actually
@@ -132,6 +140,7 @@ pub struct MangaConverter {
     pub extensions: extensions::ExtensionList,
 
     soft_match: bool,
+    runtime: script_interface::ScriptRuntime,
     category_sort_type: CategorySortType,
 }
 
@@ -155,6 +164,7 @@ impl MangaConverter {
             parsers: Vec::new(),
             extensions: extensions::ExtensionList::default(),
             soft_match: false,
+            runtime: script_interface::ScriptRuntime::default(),
             category_sort_type: CategorySortType::J2K,
         }
     }
@@ -178,6 +188,10 @@ impl MangaConverter {
         }
     }
 
+    pub fn with_runtime(self, runtime: script_interface::ScriptRuntime) -> Self {
+        Self { runtime, ..self }
+    }
+
     pub fn with_category_sort_type(self, category_sort_type: CategorySortType) -> Self {
         Self {
             category_sort_type,
@@ -198,6 +212,8 @@ impl MangaConverter {
             parsers,
             extensions,
             soft_match: false,
+            runtime: script_interface::ScriptRuntime::default(),
+            category_sort_type: CategorySortType::J2K,
         })
     }
 
@@ -261,19 +277,48 @@ impl MangaConverter {
     fn manga_to_kotatsu(
         &mut self,
         manga: &nekotatsu::neko::BackupManga,
-    ) -> Option<KotatsuMangaBackup> {
-        let source_info = self.extensions.get_source(manga.source)?;
-        let domain = source_info.baseUrl;
+    ) -> Result<KotatsuMangaBackup, ConversionError> {
+        let source_info = self
+            .extensions
+            .get_source(manga.source)
+            .expect("source should exist if we are converting the manga");
+        let base_url =
+            url::Url::parse(&source_info.baseUrl).map_err(ConversionError::URLParseError)?;
+        // Consistency: Kotatsu requires that the base url does not include scheme
+        // Note: using BeforeHost instead of grabbing domain directly
+        // because both in Kotatsu and Tachiyomi,
+        // some sources delineate language using a path
+        let domain = &base_url[url::Position::BeforeHost..];
         let source_name = self.get_source_name(manga);
-        let relative_url = kotatsu::correct_relative_url(&source_name, &manga.url);
-        let manga_identifier = kotatsu::correct_identifier(&source_name, &relative_url);
+        let relative_url = self
+            .runtime
+            .correct_relative_url(&source_name, &domain, &manga.url)
+            .map_err(ConversionError::ScriptError)?;
+        let manga_identifier = self
+            .runtime
+            .correct_manga_identifier(&source_name, &relative_url)
+            .map_err(ConversionError::ScriptError)?;
+        let public_url = self
+            .runtime
+            .correct_public_url(&source_name, &domain, &manga.url)
+            .map_err(ConversionError::ScriptError)?;
 
-        Some(KotatsuMangaBackup {
+        // Some very light validation to catch errors early
+        // Note: not comparing domains since fixes may include domain migration
+        let pub_url = url::Url::parse(&public_url).map_err(ConversionError::URLParseError)?;
+        let pub_path = pub_url.path();
+        if pub_path == "/" {
+            return Err(ConversionError::URLCheckError(format!(
+                "Empty path for public url; resulting url: '{pub_url}'"
+            )));
+        }
+
+        Ok(KotatsuMangaBackup {
             id: get_kotatsu_id(&source_name, &manga_identifier),
             title: manga.title.clone(),
             alt_tile: None,
             url: relative_url.clone(),
-            public_url: kotatsu::correct_public_url(&source_name, &domain, &relative_url),
+            public_url,
             rating: -1.0,
             nsfw: false,
             cover_url: manga.thumbnail_url.clone(),
@@ -378,9 +423,32 @@ impl MangaConverter {
                 continue;
             }
 
-            let kotatsu_manga = self
-                .manga_to_kotatsu(&manga)
-                .expect("unknown Tachiyomi source not filtered");
+            let kotatsu_manga = match self.manga_to_kotatsu(&manga) {
+                Ok(backup) => backup,
+                Err(err) => {
+                    let message = match err {
+                        ConversionError::URLParseError(err) => format!(
+                            "[WARNING] Unable to convert '{}' from source {} ({}), a URL failed to be parsed: {:?}",
+                            manga.title, source.name, source.baseUrl, err
+                        ),
+                        ConversionError::URLCheckError(err) => format!(
+                            "[WARNING] Unable to convert '{}' from source {} ({}), a URL failed a check: {}",
+                            manga.title, source.name, source.baseUrl, err
+                        ),
+                        ConversionError::ScriptError(err) => format!(
+                            "[WARNING] Unable to convert '{}' from source {} ({}), runtime error in script occurred: {:?}",
+                            manga.title, source.name, source.baseUrl, err
+                        ),
+                    };
+                    logger.log_verbose(&message);
+                    errored_sources_count
+                        .entry(source.name.clone())
+                        .and_modify(|e| *e += 1)
+                        .or_insert(1);
+                    errored_manga += 1;
+                    continue;
+                }
+            };
 
             if kotatsu_manga.source == "UNKNOWN" {
                 let message = format!(
@@ -431,6 +499,24 @@ impl MangaConverter {
                         }
                         _ => current,
                     });
+
+            let mut chapter_error_logged = false;
+            let mut get_chapter_id = |path: &str| {
+                get_kotatsu_id(
+                    &kotatsu_manga.source,
+                    &self
+                        .runtime
+                        .correct_chapter_identifier(&kotatsu_manga.source, path)
+                        .unwrap_or_else(|err| {
+                            if !chapter_error_logged {
+                                logger.log_verbose(&format!("[WARNING] Error getting chapter ID for {}, there may be issues for this manga's chapters. Error: {err:?}", &kotatsu_manga.title));
+                                chapter_error_logged = true
+                            }
+                            path.to_string()
+                        }),
+                )
+            };
+
             let bookmarks: Vec<KotatsuBookmarkEntry> = manga
                 .chapters
                 .iter()
@@ -438,10 +524,7 @@ impl MangaConverter {
                     chapter.bookmark.then(|| KotatsuBookmarkEntry {
                         manga_id: kotatsu_manga.id,
                         page_id: 0,
-                        chapter_id: get_kotatsu_id(
-                            &kotatsu_manga.source,
-                            &correct_identifier(&kotatsu_manga.source, &chapter.url),
-                        ),
+                        chapter_id: get_chapter_id(&chapter.url),
                         page: chapter.last_page_read,
                         scroll: 0,
                         image_url: kotatsu_manga.cover_url.clone(),
@@ -475,10 +558,7 @@ impl MangaConverter {
                 created_at: manga.date_added,
                 updated_at: last_read,
                 chapter_id: if let Some(latest) = latest_chapter {
-                    get_kotatsu_id(
-                        &kotatsu_manga.source,
-                        &correct_identifier(&kotatsu_manga.source, &latest.url),
-                    )
+                    get_chapter_id(&latest.url)
                 } else {
                     0
                 },
