@@ -32,6 +32,8 @@ static DEFAULT_TACHI_SOURCE_PATH: LazyLock<PathBuf> =
     LazyLock::new(|| APP_PATH.data_dir().join("tachi_sources.json"));
 static DEFAULT_KOTATSU_PARSE_PATH: LazyLock<PathBuf> =
     LazyLock::new(|| APP_PATH.data_dir().join("kotatsu_parsers.json"));
+static DEFAULT_SCRIPT_PATH: LazyLock<PathBuf> =
+    LazyLock::new(|| APP_PATH.data_dir().join("correction.luau"));
 
 /// Simple CLI tool that converts Neko backups into Kotatsu backups
 #[derive(Debug, Parser)]
@@ -96,9 +98,25 @@ pub enum Commands {
         #[arg(short, long, default_value_t = String::from("https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"))]
         tachi_link: String,
 
-        /// Force download of files even if they already exist
+        /// Download URL for correction script
+        #[arg(short, long, default_value_t = String::from("https://raw.githubusercontent.com/phantomshift/nekotatsu/nekotatsu-core/src/correction.luau"))]
+        script_link: String,
+
+        /// Force download of all files even if they already exist
         #[arg(short, long)]
         force_download: bool,
+
+        /// Force download of Kotatsu parsers repo
+        #[arg(alias("fk"), long)]
+        force_kotatsu: bool,
+
+        /// Force download of Tachiyomi extensions list
+        #[arg(alias("ft"), long)]
+        force_tachi: bool,
+
+        /// Force download of correction script
+        #[arg(alias("fs"), long)]
+        force_script: bool,
     },
 
     /// Output backup info
@@ -144,7 +162,16 @@ fn neko_to_kotatsu_command(
         std::fs::File::open(&DEFAULT_KOTATSU_PARSE_PATH.as_path())?,
         std::fs::File::open(&DEFAULT_TACHI_SOURCE_PATH.as_path())?,
     )?
-    .with_soft_match(soft_match);
+    .with_soft_match(soft_match)
+    .with_runtime(
+        match script_interface::ScriptRuntime::create(&DEFAULT_SCRIPT_PATH.as_path()) {
+            Ok(runtime) => runtime,
+            Err(err) => {
+                logger.log_info(&format!("[WARNING] Error loading downloaded script, falling back to default implementation, which may be outdated. Original error: {err:?}",));
+                script_interface::ScriptRuntime::default()
+            }
+        }
+    );
 
     let backup = decode_neko_backup(std::fs::File::open(&input_path)?)?;
 
@@ -388,45 +415,76 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
         Commands::Update {
             kotatsu_link,
             tachi_link,
+            script_link,
             force_download,
+            force_kotatsu,
+            force_tachi,
+            force_script,
         } => {
             let data_path = APP_PATH.data_dir();
             if !data_path.try_exists()? {
                 std::fs::create_dir_all(&data_path)?;
             }
-            let tachi_path = data_path.join("tachi_sources.json");
-            if force_download || !tachi_path.try_exists()? {
-                let response = reqwest::blocking::get(tachi_link);
-                if let Ok(response) = response {
-                    let text = response.text().unwrap();
-                    std::fs::write(tachi_path.as_path(), text)?;
-                    println!("Successfully updated extension info.");
-                } else {
-                    println!("Failed to download source info.");
-                    return Ok(CommandResult::None);
-                }
+
+            macro_rules! attempt_download {
+                ($path:expr, $link:ident, $force:ident, $success:expr, $failure:expr) => {{
+                    let output_path = data_path.join($path);
+                    if $force || force_download || !output_path.try_exists()? {
+                        let response = reqwest::blocking::get($link);
+                        match response {
+                            Ok(response) if response.status().is_success() => {
+                                let b = response
+                                    .bytes()
+                                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                                std::fs::write(&output_path, b)?;
+                                println!($success)
+                            }
+                            Ok(failed) => {
+                                println!($failure);
+                                println!("Response: {}", failed.status(),);
+                                return Ok(CommandResult::None);
+                            }
+                            Err(err) => {
+                                println!($failure);
+                                println!("Error: {err:#?}");
+                                return Ok(CommandResult::None);
+                            }
+                        }
+                    }
+
+                    output_path
+                }};
             }
 
-            let kotatsu_path = data_path.join("kotatsu-parsers.zip");
-            if force_download || !kotatsu_path.try_exists()? {
-                let response = reqwest::blocking::get(kotatsu_link);
-                if let Ok(response) = response {
-                    let b = response
-                        .bytes()
-                        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-                    std::fs::write(kotatsu_path.as_path(), b)?;
-                    println!("Successfully downloaded parser repo.");
-                } else {
-                    println!("Failed to download parser repo.");
-                    return Ok(CommandResult::None);
-                }
-            }
+            attempt_download!(
+                "tachi_sources.json",
+                tachi_link,
+                force_tachi,
+                "Successfully updated extension info.",
+                "Failed to download source info."
+            );
+
+            let kotatsu_path = attempt_download!(
+                "kotatsu-parsers.zip",
+                kotatsu_link,
+                force_kotatsu,
+                "Successfully downloaded parser repo.",
+                "Failed to download parser repo."
+            );
 
             let new_data = std::fs::File::open(&kotatsu_path)?;
             let save_to = std::fs::File::create(&DEFAULT_KOTATSU_PARSE_PATH.as_path())?;
 
             kotatsu::update_parsers(&new_data, &save_to)?;
             println!("Successfully updated parser info.");
+
+            attempt_download!(
+                "correction.luau",
+                script_link,
+                force_script,
+                "Successfully downloaded correction script.",
+                "Failed to download correction script."
+            );
 
             Ok(CommandResult::None)
         }
