@@ -136,7 +136,13 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
                 tachi_link: String::from(
                     "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json",
                 ),
+                script_link: String::from(
+                    "https://raw.githubusercontent.com/phantomshift/nekotatsu/nekotatsu-core/src/correction.luau"
+                ),
                 force_download: false,
+                force_kotatsu: false,
+                force_tachi: false,
+                force_script: false
             });
             uc_handle
                 .upgrade_in_event_loop(|app| app.set_processing(false))
