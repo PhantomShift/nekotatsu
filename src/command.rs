@@ -116,15 +116,15 @@ pub enum Commands {
     /// (`~/.local/share/nekotatsu` on Linux and `%APPDATA%\Nekotatsu\data` on Windows)
     /// as `tachi_sources.json` and `kotatsu_parsers.json`.
     Update {
-        /// Download URL for Kotatsu parsers repo.
+        /// Download URL or file path for Kotatsu parsers repo.
         #[arg(short, long, default_value_t = String::from("https://github.com/KotatsuApp/kotatsu-parsers/archive/refs/heads/master.zip"))]
         kotatsu_link: String,
 
-        /// Download URL for Tachiyomi extension json list (minified)
+        /// Download URL or file path for Tachiyomi extension json list (minified)
         #[arg(short, long, default_value_t = String::from("https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"))]
         tachi_link: String,
 
-        /// Download URL for correction script
+        /// Download URL or ifle path for correction script
         #[arg(short, long, default_value_t = String::from("https://raw.githubusercontent.com/phantomshift/nekotatsu/nekotatsu-core/src/correction.luau"))]
         script_link: String,
 
@@ -132,16 +132,16 @@ pub enum Commands {
         #[arg(short, long)]
         force_download: bool,
 
-        /// Force download of Kotatsu parsers repo
-        #[arg(alias("fk"), long)]
+        /// Force download/copy of Kotatsu parsers repo
+        #[arg(visible_alias("fk"), long)]
         force_kotatsu: bool,
 
-        /// Force download of Tachiyomi extensions list
-        #[arg(alias("ft"), long)]
+        /// Force download/copy of Tachiyomi extensions list
+        #[arg(visible_alias("ft"), long)]
         force_tachi: bool,
 
-        /// Force download of correction script
-        #[arg(alias("fs"), long)]
+        /// Force download/copy of correction script
+        #[arg(visible_alias("fs"), long)]
         force_script: bool,
     },
 

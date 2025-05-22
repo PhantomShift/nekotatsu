@@ -52,6 +52,9 @@ nekotatsu convert my_backup.tachibk --config-file nekotatsu.toml
 
 Run the commands with `--help` to view these messages.
 
+<details>
+<summary>nekotatsu</summary>
+
 ```
 Usage: nekotatsu <COMMAND>
 
@@ -67,7 +70,11 @@ Options:
   -V, --version  Print version
 ```
 
-`convert`
+</details>
+
+<details>
+<summary>convert</summary>
+
 ```
 Usage: nekotatsu convert [OPTIONS] <INPUT>
 
@@ -92,15 +99,26 @@ Options:
   -c, --config-file <CONFIG_FILE>
 ```
 
-`update`
+</details>
+
+<details>
+<summary>update</summary>
+
 ```
 Usage: nekotatsu update [OPTIONS]
 
 Options:
-  -k, --kotatsu-link <KOTATSU_LINK>  Download URL for Kotatsu parsers repo [default: https://github.com/KotatsuApp/kotatsu-parsers/archive/refs/heads/master.zip]
-  -t, --tachi-link <TACHI_LINK>      Download URL for Tachiyomi extension json list (minified) [default: https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json]
-  -f, --force-download               Force download of files even if they already exist
+  -k, --kotatsu-link <KOTATSU_LINK>  Download URL or file path for Kotatsu parsers repo [default: https://github.com/KotatsuApp/kotatsu-parsers/archive/refs/heads/master.zip]
+  -t, --tachi-link <TACHI_LINK>      Download URL or file path for Tachiyomi extension json list (minified) [default: https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json]
+  -s, --script-link <SCRIPT_LINK>    Download URL or ifle path for correction script [default: https://raw.githubusercontent.com/phantomshift/nekotatsu/nekotatsu-core/src/correction.luau]
+  -f, --force-download               Force download of all files even if they already exist
+      --force-kotatsu                Force download/copy of Kotatsu parsers repo [aliases: --fk]
+      --force-tachi                  Force download/copy of Tachiyomi extensions list [aliases: --ft]
+      --force-script                 Force download/copy of correction script [aliases: --fs]
+  -h, --help                         Print help
 ```
+
+</details>
 
 ## Motivation
 First off, why specifically Neko instead of mainline Tachiyomi? No real reason honestly. It's not like I have some sort of agenda against Tachiyomi, I just use Neko specifically since I only use Mangadex, and I created this tool for my own use. (Also the name "Nekotatsu" is kinda cool.)
