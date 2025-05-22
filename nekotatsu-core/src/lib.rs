@@ -567,8 +567,10 @@ impl MangaConverter {
                     .unwrap_or(0),
                 scroll: 0.0,
                 percent: match (latest_chapter, newest_cached_chapter) {
-                    (Some(latest), Some(newest)) if latest.chapter_number > 0.0 => {
-                        (latest.chapter_number - 1.0) / newest.chapter_number
+                    (Some(latest), Some(newest))
+                        if latest.chapter_number > 0.0 && newest.chapter_number > 0.0 =>
+                    {
+                        (latest.chapter_number / newest.chapter_number).clamp(0.0, 1.0)
                     }
                     _ => 0.0,
                 },
