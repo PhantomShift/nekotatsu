@@ -119,15 +119,24 @@ pub enum Commands {
         force_script: bool,
     },
 
-    /// Output backup info
-    #[command(hide(true))]
-    Debug { input: String },
-
     /// Deletes any files downloaded by nekotatsu (the data directory);
     /// Effectively the same as running `rm -rf ~/.local/share/nekotatsu` on Linux and `rmdir /s /q %APPDATA%\Nekotatsu` on Windows.
     Clear,
     /// Alias for `clear`
     Delete,
+
+    /// Output backup info
+    #[command(hide(true))]
+    Debug { input: String },
+
+    #[command(hide(true))]
+    Filter {
+        input: PathBuf,
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        #[arg(short, long, value_delimiter('\n'))]
+        filter_ids: Vec<i64>,
+    },
 }
 
 #[derive(Debug)]
@@ -557,6 +566,23 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
             }
         }
 
+        Commands::Clear | Commands::Delete => {
+            let path = APP_PATH.data_dir();
+            #[cfg(target_os = "windows")]
+            let path = path.parent().ok_or(std::io::Error::new(
+                io::ErrorKind::Other,
+                "Unable to get Nekotatsu data folder path",
+            ))?;
+
+            if path.try_exists()? {
+                std::fs::remove_dir_all(&path)?;
+                println!("Deleted directory `{}`", path.display());
+            } else {
+                println!("Data does not exist/is already deleted.")
+            }
+            Ok(CommandResult::None)
+        }
+
         Commands::Debug { input } => {
             let backup = decode_neko_backup(std::fs::File::open(&input)?)?;
 
@@ -572,20 +598,58 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
             Ok(CommandResult::None)
         }
 
-        Commands::Clear | Commands::Delete => {
-            let path = APP_PATH.data_dir();
-            #[cfg(target_os = "windows")]
-            let path = path.parent().ok_or(std::io::Error::new(
-                io::ErrorKind::Other,
-                "Unable to get Nekotatsu data folder path",
-            ))?;
+        Commands::Filter {
+            input,
+            output,
+            filter_ids,
+        } => {
+            let backup = decode_neko_backup(std::fs::File::open(&input)?)?;
 
-            if path.try_exists()? {
-                std::fs::remove_dir_all(&path)?;
-                println!("Deleted directory `{}`", path.display());
-            } else {
-                println!("Data does not exist/is already deleted.")
-            }
+            let filter_ids: std::collections::HashSet<i64, std::hash::RandomState> =
+                std::collections::HashSet::from_iter(filter_ids.into_iter());
+
+            let filtered: Vec<nekotatsu::neko::BackupManga> = backup
+                .backup_manga
+                .iter()
+                .filter_map(|manga| {
+                    if filter_ids.contains(&manga.source) {
+                        // Compat: deserialization fails in app if
+                        // last_read is 0
+                        let history = manga
+                            .history
+                            .iter()
+                            .filter_map(|h| (h.last_read != 0).then_some(h.clone()))
+                            .collect();
+                        Some(nekotatsu::neko::BackupManga {
+                            history,
+                            ..manga.clone()
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            let filtered = nekotatsu::neko::Backup {
+                backup_manga: filtered,
+                ..backup
+            };
+
+            let mut buffer = Vec::new();
+            filtered.encode(&mut buffer)?;
+
+            let output_path = std::path::Path::new(&output.unwrap_or(input))
+                .with_extension("")
+                .with_extension("filtered.tachibk");
+
+            let output_file = std::fs::File::create(&output_path)?;
+            let mut writer = GzEncoder::new(output_file, Compression::best());
+
+            writer.write_all(&mut buffer)?;
+            writer.finish()?;
+
+            println!("Filtered successfully, output: {}", output_path.display());
+
             Ok(CommandResult::None)
         }
     }
