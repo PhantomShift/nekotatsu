@@ -35,6 +35,32 @@ static DEFAULT_KOTATSU_PARSE_PATH: LazyLock<PathBuf> =
 static DEFAULT_SCRIPT_PATH: LazyLock<PathBuf> =
     LazyLock::new(|| APP_PATH.data_dir().join("correction.luau"));
 
+enum PathType {
+    Url(reqwest::Url),
+    Filesystem(PathBuf),
+}
+
+impl TryFrom<&str> for PathType {
+    type Error = std::io::Error;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let path = {
+            if let Ok(url) = reqwest::Url::parse(value) {
+                if let Ok(path) = url.to_file_path() {
+                    path
+                } else {
+                    return Ok(PathType::Url(url));
+                }
+            } else {
+                PathBuf::from(value)
+            }
+        };
+        match path.canonicalize() {
+            Ok(path) => Ok(PathType::Filesystem(path)),
+            Err(e) => Err(e),
+        }
+    }
+}
+
 /// Simple CLI tool that converts Neko backups into Kotatsu backups
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -435,65 +461,79 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
                 std::fs::create_dir_all(&data_path)?;
             }
 
-            macro_rules! attempt_download {
-                ($path:expr, $link:ident, $force:ident, $success:expr, $failure:expr) => {{
-                    let output_path = data_path.join($path);
-                    if $force || force_download || !output_path.try_exists()? {
-                        let response = reqwest::blocking::get($link);
-                        match response {
-                            Ok(response) if response.status().is_success() => {
-                                let b = response
-                                    .bytes()
-                                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-                                std::fs::write(&output_path, b)?;
-                                println!($success)
-                            }
-                            Ok(failed) => {
-                                println!($failure);
-                                println!("Response: {}", failed.status(),);
-                                return Ok(CommandResult::None);
-                            }
-                            Err(err) => {
-                                println!($failure);
-                                println!("Error: {err:#?}");
-                                return Ok(CommandResult::None);
+            let attempt_download = |destination: &str,
+                                    from: &str,
+                                    force: bool,
+                                    success_message: &str,
+                                    failure_message: &str|
+             -> std::io::Result<PathBuf> {
+                let output_path = data_path.join(destination);
+                if force || force_download || !output_path.try_exists()? {
+                    match PathType::try_from(from) {
+                        Ok(PathType::Filesystem(path)) => {
+                            std::fs::copy(&path, &output_path)?;
+                            println!("Copied {} to {}", path.display(), output_path.display());
+                        }
+                        Err(e) => {
+                            println!("Error getting file: if this is a url, did you include 'https://'? Original error: {e:?}");
+                        }
+
+                        Ok(PathType::Url(url)) => {
+                            let response = reqwest::blocking::get(url);
+                            match response {
+                                Ok(response) if response.status().is_success() => {
+                                    let b = response
+                                        .bytes()
+                                        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                                    std::fs::write(&output_path, b)?;
+                                    println!("{success_message}")
+                                }
+                                Ok(failed) => {
+                                    println!("{failure_message}");
+                                    println!("Response: {}", failed.status(),);
+                                }
+                                Err(err) => {
+                                    println!("{failure_message}");
+                                    println!("Error: {err:#?}");
+                                }
                             }
                         }
-                    }
+                    };
+                }
+                Ok(output_path)
+            };
 
-                    output_path
-                }};
-            }
-
-            attempt_download!(
+            attempt_download(
                 "tachi_sources.json",
-                tachi_link,
+                &tachi_link,
                 force_tachi,
                 "Successfully updated extension info.",
-                "Failed to download source info."
-            );
+                "Failed to download source info.",
+            )?;
 
-            let kotatsu_path = attempt_download!(
+            attempt_download(
                 "kotatsu-parsers.zip",
-                kotatsu_link,
+                &kotatsu_link,
                 force_kotatsu,
                 "Successfully downloaded parser repo.",
-                "Failed to download parser repo."
-            );
+                "Failed to download parser repo.",
+            )
+            .and_then(|kotatsu_path| {
+                let new_data = std::fs::File::open(&kotatsu_path)?;
+                let save_to = std::fs::File::create(&DEFAULT_KOTATSU_PARSE_PATH.as_path())?;
+                kotatsu::update_parsers(&new_data, &save_to)?;
+                Ok(kotatsu_path)
+            })?;
 
-            let new_data = std::fs::File::open(&kotatsu_path)?;
-            let save_to = std::fs::File::create(&DEFAULT_KOTATSU_PARSE_PATH.as_path())?;
-
-            kotatsu::update_parsers(&new_data, &save_to)?;
             println!("Successfully updated parser info.");
 
-            attempt_download!(
+            attempt_download(
                 "correction.luau",
-                script_link,
+                &script_link,
                 force_script,
                 "Successfully downloaded correction script.",
-                "Failed to download correction script."
-            );
+                "Failed to download correction script.",
+            )?;
 
             Ok(CommandResult::None)
         }
