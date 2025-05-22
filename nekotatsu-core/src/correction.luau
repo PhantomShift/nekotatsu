@@ -29,7 +29,7 @@ function correct_relative_url(name: string, domain: string, url: string)
 		return `https://{domain}/api/series/{url}`
 	end
 
-	return `{domain}{url}`
+	return url
 end
 
 local UNIQUE_PUBLIC: {
