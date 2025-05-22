@@ -17,6 +17,13 @@ local UNIQUE_RELATIVE: {
 		url = url:gsub("/series/", "")
 		return (url:split("/"))[1]
 	end,
+
+	-- Note: Does not fix UID generation as Kotatsu uses the
+	-- public-facing slug while the Tachi extension exclusively uses the hid,
+	-- but it should ensure that the getDetails function in Kotatsu runs successfully
+	COMICK_FUN = function(_domain, url)
+		return select(1, url:gsub("/comic/", "", 1))
+	end,
 }
 
 function correct_relative_url(name: string, domain: string, url: string)
