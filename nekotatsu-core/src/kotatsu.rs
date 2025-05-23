@@ -50,7 +50,10 @@ static DOMAIN_CAPTURE_METHODS: LazyLock<Vec<DomainCaptureMethod>> = LazyLock::ne
         .unwrap()),
     DomainCaptureMethod::Single(Regex::new(r#"\w+\(\s*context,\s*\w+Source\.\w+,\s*"(?P<domain>[\w\.\-/]+)""#).unwrap()),
     DomainCaptureMethod::Single(Regex::new(r#"\(\s*context,\s*MangaSource\.\w+,\s*.(?P<domain>[\w\.\-/]+)."#).unwrap()),
-    DomainCaptureMethod::Single(Regex::new(r#"\w+\(\s*context = context,\s*source = \w+.\w+,\s*(siteId = \d+,\s*)?siteDomain = "(?P<domain>[\w\.\-/]+)""#).unwrap())
+    DomainCaptureMethod::Single(regex::RegexBuilder::new(r#"\w+\(\s*context = context,\s*source = \w+.\w+,\s*(siteId = \d+,\s*)?(?:site)?Domain = "(?P<domain>[\w\.\-/]+)""#)
+        .case_insensitive(true)
+        .build()
+        .unwrap())
 ]
 });
 
