@@ -1,7 +1,7 @@
 workspace = { members = ["tools", "gui", "nekotatsu-core", "nekotatsu-core/lua_derive"] }
 [package]
 name = "nekotatsu"
-version = "1.4.0"
+version = "1.4.1"
 resolver = "2"
 edition="2021"
 

@@ -125,7 +125,7 @@ pub enum Commands {
         tachi_link: String,
 
         /// Download URL or ifle path for correction script
-        #[arg(short, long, default_value_t = String::from("https://raw.githubusercontent.com/phantomshift/nekotatsu/nekotatsu-core/src/correction.luau"))]
+        #[arg(short, long, default_value_t = String::from("https://raw.githubusercontent.com/phantomshift/nekotatsu/master/nekotatsu-core/src/correction.luau"))]
         script_link: String,
 
         /// Force download of all files even if they already exist
