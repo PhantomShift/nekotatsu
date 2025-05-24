@@ -202,7 +202,7 @@ fn neko_to_kotatsu_command(
         match script_interface::ScriptRuntime::create(&DEFAULT_SCRIPT_PATH.as_path()) {
             Ok(runtime) => runtime,
             Err(err) => {
-                logger.log_info(&format!("[WARNING] Error loading downloaded script, falling back to default implementation, which may be outdated. Original error: {err:?}",));
+                logger.log_info(&format!("[WARNING] Error loading downloaded script, falling back to default implementation, which may be outdated. Did you run the update command? Original error: {err:?}",));
                 script_interface::ScriptRuntime::default()
             }
         }
