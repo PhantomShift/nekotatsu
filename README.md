@@ -21,6 +21,11 @@ to turn your backup into a zip file that Kotatsu can parse. Get this zip file on
 
 If you don't plan on using the tool again any time soon, make sure to run `nekotatsu clear` to remove any files nekotatsu downloaded/generated from `nekotatsu update`.
 
+> Do note there's a high chance that even if the conversion succeeds, the manga entry behaves strangely in the Kotatsu app;
+> in that case, you will likely need to migrate (which must be done one-by-one) or fix (which may not work depending on how it's implemented)
+> the manga. Please *do not* report any issues you face from using this tool to Kotatsu or their devs,
+> as they have no involvement with this project.
+
 ## Whitelisting/Blacklisting
 
 You may choose to filter which manga get converted with either a blacklist or a whitelist.
@@ -110,7 +115,7 @@ Usage: nekotatsu update [OPTIONS]
 Options:
   -k, --kotatsu-link <KOTATSU_LINK>  Download URL or file path for Kotatsu parsers repo [default: https://github.com/KotatsuApp/kotatsu-parsers/archive/refs/heads/master.zip]
   -t, --tachi-link <TACHI_LINK>      Download URL or file path for Tachiyomi extension json list (minified) [default: https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json]
-  -s, --script-link <SCRIPT_LINK>    Download URL or ifle path for correction script [default: https://raw.githubusercontent.com/phantomshift/nekotatsu/nekotatsu-core/src/correction.luau]
+  -s, --script-link <SCRIPT_LINK>    Download URL or ifle path for correction script [default: https://raw.githubusercontent.com/phantomshift/nekotatsu/master/nekotatsu-core/src/correction.luau]
   -f, --force-download               Force download of all files even if they already exist
       --force-kotatsu                Force download/copy of Kotatsu parsers repo [aliases: --fk]
       --force-tachi                  Force download/copy of Tachiyomi extensions list [aliases: --ft]
