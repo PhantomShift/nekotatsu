@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use etcetera::{app_strategy::AppStrategy, AppStrategyArgs};
 use flate2::{write::GzEncoder, Compression};
+use nekotatsu_core::tracing::{debug, error};
 use prost::Message;
 use std::{
     collections::HashMap,
@@ -11,6 +12,7 @@ use std::{
 
 use crate::nekotatsu_core::config::SourceFilterList;
 use crate::nekotatsu_core::kotatsu::{self, *};
+use crate::nekotatsu_core::tracing::{info, warn};
 use crate::nekotatsu_core::*;
 
 #[cfg(target_os = "windows")]
@@ -106,9 +108,6 @@ pub enum Commands {
 
         #[arg(short, long)]
         config_file: Option<PathBuf>,
-
-        #[arg(long, hide = true, default_value_t = true)]
-        print_output: bool,
     },
 
     /// Downloads latest Tachiyomi source information and
@@ -175,7 +174,7 @@ pub enum CommandVerbosity {
 #[derive(Debug)]
 pub enum CommandResult {
     None,
-    Success(String, String),
+    Success(String),
 }
 
 fn neko_to_kotatsu_command(
@@ -184,15 +183,8 @@ fn neko_to_kotatsu_command(
     verbosity: CommandVerbosity,
     favorites_name: String,
     soft_match: bool,
-    print_output: bool,
     config: config::ConfigFile,
 ) -> std::io::Result<CommandResult> {
-    let mut logger: Box<dyn Logger> = if print_output {
-        Box::new(std::io::stdout())
-    } else {
-        Box::new(Vec::new())
-    };
-
     let converter = MangaConverter::try_from_files(
         std::fs::File::open(&DEFAULT_KOTATSU_PARSE_PATH.as_path())?,
         std::fs::File::open(&DEFAULT_TACHI_SOURCE_PATH.as_path())?,
@@ -202,7 +194,7 @@ fn neko_to_kotatsu_command(
         match script_interface::ScriptRuntime::create(&DEFAULT_SCRIPT_PATH.as_path()) {
             Ok(runtime) => runtime,
             Err(err) => {
-                logger.log_info(&format!("[WARNING] Error loading downloaded script, falling back to default implementation, which may be outdated. Did you run the update command? Original error: {err:?}",));
+                warn!("Error loading downloaded script, falling back to default implementation, which may be outdated. Did you run the update command? Original error: {err:?}",);
                 script_interface::ScriptRuntime::default()
             }
         }
@@ -222,12 +214,7 @@ fn neko_to_kotatsu_command(
             (_, _) => Box::new(|_| true),
         };
 
-    let result = converter.convert_backup(
-        backup,
-        &favorites_name,
-        logger.as_mut(),
-        filter_method.as_mut(),
-    );
+    let result = converter.convert_backup(backup, &favorites_name, filter_method.as_mut());
 
     let to_make = std::fs::File::create(output_path.clone())?;
     let options = zip::write::FileOptions::<()>::default();
@@ -253,35 +240,35 @@ fn neko_to_kotatsu_command(
                 writer.start_file(name, options)?;
                 writer.write_all(json.as_bytes())?;
             }
-            Ok(_) => logger.log_info(&format!("{name} is empty, ommitted from converted backup")),
-            Err(e) => logger.log_info(&format!(
-                "[WARNING] Error occurred processing {name}, ommitted from converted backup, original error: {e}"
-            )),
+            Ok(_) => info!("{name} is empty, ommitted from converted backup"),
+            Err(e) => warn!(
+                "Error occurred processing {name}, ommitted from converted backup, original error: {e}"
+            ),
         }
     }
 
     writer.finish()?;
 
     if result.errored_manga == 0 {
-        logger.log_info(&format!(
+        info!(
             "{} manga successfully converted ({} ignored), output: {}",
             result.total_manga - result.ignored_manga,
             result.ignored_manga,
             output_path.display()
-        ));
+        );
     } else {
-        logger.log_info(&format!(
+        info!(
             "{} of {} manga and {} sources failed to convert ({} unknown).",
             result.errored_manga,
             result.total_manga,
             result.errored_sources.len(),
             result.unknown_sources.len()
-        ));
+        );
         match verbosity {
             CommandVerbosity::None => {
-                logger.log_info("Try running again with verbose (-v) on for details");
+                info!("Try running again with verbose (-v) on for details");
             }
-            CommandVerbosity::Verbose => logger.log_verbose(&format!(
+            CommandVerbosity::Verbose => warn!(
                 "Sources that errored: {}",
                 result
                     .errored_sources
@@ -289,21 +276,28 @@ fn neko_to_kotatsu_command(
                     .map(|s| s.as_str())
                     .collect::<Vec<_>>()
                     .join(", ")
-            )),
+            ),
             CommandVerbosity::VeryVerbose => {
-                logger.log_very_verbose("Sources that errorred:");
-                for (name, url) in result.errored_sources.iter() {
-                    logger.log_very_verbose(&format!(
-                        "{name} ({url}), count: {}",
-                        result.errored_sources_count.get(name).unwrap_or(&0)
-                    ));
-                }
+                warn!(
+                    "Sources that errorred:\n{}",
+                    result
+                        .errored_sources
+                        .iter()
+                        .map(|(name, url)| {
+                            format!(
+                                "{name} ({url}), count: {}",
+                                result.errored_sources_count.get(name).unwrap_or(&0)
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                );
             }
         }
         if result.unknown_sources.len() > 0 {
             match verbosity {
                 CommandVerbosity::None => (),
-                CommandVerbosity::Verbose => logger.log_verbose(&format!(
+                _ => warn!(
                     "Unknown Tachiyomi/Mihon source IDs: {}",
                     result
                         .unknown_sources
@@ -311,36 +305,24 @@ fn neko_to_kotatsu_command(
                         .map(|s| s.as_str())
                         .collect::<Vec<_>>()
                         .join(", ")
-                )),
-                CommandVerbosity::VeryVerbose => {
-                    logger.log_very_verbose("Unknown Tachiyomi/Mihon source IDs:");
-                    for id in result.unknown_sources.iter() {
-                        logger.log_very_verbose(id);
-                    }
-                }
+                ),
             }
         }
 
-        logger.log_info(&format!(
+        warn!(
             "Conversion completed with errors, output: {}",
             output_path.display()
-        ));
+        );
         if let CommandVerbosity::Verbose = verbosity {
-            logger
-                .log_verbose("Run command with very verbose (-V) to display ALL debug information.")
+            info!("Run command with very verbose (-V) to display ALL debug information.")
         }
     }
 
     if soft_match {
-        logger.log_info(
-            "[IMPORTANT] Command run with 'soft match' on; some sources may not behave as intended",
-        )
+        warn!("Command run with 'soft match' on; some sources may not behave as intended",)
     }
 
-    Ok(CommandResult::Success(
-        output_path.display().to_string(),
-        logger.capture_output(),
-    ))
+    Ok(CommandResult::Success(output_path.display().to_string()))
 }
 
 fn kotatsu_to_neko_manga(k: &KotatsuMangaBackup) -> nekotatsu::neko::BackupManga {
@@ -370,7 +352,7 @@ fn kotatsu_to_neko_manga(k: &KotatsuMangaBackup) -> nekotatsu::neko::BackupManga
 fn kotatsu_to_neko(input_path: String, output_path: PathBuf) -> std::io::Result<CommandResult> {
     // I would at the very least like to be able to get the latest chapter and the bookmarks
     // but the process of getting the URL from the ID is not reasonably reversible as far as I can see
-    println!("Note: limited support. Chapter information (including history and bookmarks) cannot be converted from Kotatsu backups.");
+    warn!("Note: limited support. Chapter information (including history and bookmarks) cannot be converted from Kotatsu backups.");
 
     let bytes = std::fs::File::open(&input_path)?;
     let mut reader = zip::read::ZipArchive::new(bytes)?;
@@ -380,7 +362,7 @@ fn kotatsu_to_neko(input_path: String, output_path: PathBuf) -> std::io::Result<
     // let mut bookmarks: Option<Vec<KotatsuBookmarkBackup>> = None;
     for i in 0..reader.len() {
         let file = reader.by_index(i)?;
-        println!("File: {}", file.name());
+        debug!("File: {}", file.name());
         match file.name() {
             "history" => history = Some(serde_json::from_reader(file)?),
             "categories" => categories = Some(serde_json::from_reader(file)?),
@@ -434,15 +416,12 @@ fn kotatsu_to_neko(input_path: String, output_path: PathBuf) -> std::io::Result<
     let mut encoder = GzEncoder::new(&mut output, Compression::fast());
     encoder.write_all(&mut buffer)?;
 
-    println!(
+    info!(
         "Conversion completed successfully, output: {}",
         output_path.display()
     );
 
-    Ok(CommandResult::Success(
-        output_path.display().to_string(),
-        String::new(),
-    ))
+    Ok(CommandResult::Success(output_path.display().to_string()))
 }
 
 pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
@@ -472,10 +451,10 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
                     match PathType::try_from(from) {
                         Ok(PathType::Filesystem(path)) => {
                             std::fs::copy(&path, &output_path)?;
-                            println!("Copied {} to {}", path.display(), output_path.display());
+                            info!("Copied {} to {}", path.display(), output_path.display());
                         }
                         Err(e) => {
-                            println!("Error getting file: if this is a url, did you include 'https://'? Original error: {e:?}");
+                            error!("Error getting file: if this is a url, did you include 'https://'? Original error: {e:?}");
                         }
 
                         Ok(PathType::Url(url)) => {
@@ -486,15 +465,15 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
                                         .bytes()
                                         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
                                     std::fs::write(&output_path, b)?;
-                                    println!("{success_message}")
+                                    info!("{success_message}")
                                 }
                                 Ok(failed) => {
-                                    println!("{failure_message}");
-                                    println!("Response: {}", failed.status(),);
+                                    error!("{failure_message}");
+                                    error!("Response: {}", failed.status(),);
                                 }
                                 Err(err) => {
-                                    println!("{failure_message}");
-                                    println!("Error: {err:#?}");
+                                    error!("{failure_message}");
+                                    error!("Error: {err:#?}");
                                 }
                             }
                         }
@@ -525,7 +504,7 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
                 Ok(kotatsu_path)
             })?;
 
-            println!("Successfully updated parser info.");
+            info!("Successfully updated parser info.");
 
             attempt_download(
                 "correction.luau",
@@ -547,7 +526,6 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
             reverse,
             soft_match,
             force,
-            print_output,
             config_file,
             // TODO: Category sorting method override, automatically detect if it should use default from filename
         } => {
@@ -579,7 +557,7 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
                 match buf.trim_end().to_lowercase().as_str() {
                     "y" | "yes" => (),
                     _ => {
-                        println!("Conversion cancelled");
+                        info!("Conversion cancelled");
                         return Ok(CommandResult::None);
                     }
                 }
@@ -588,10 +566,17 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
             if reverse {
                 kotatsu_to_neko(input_path, output_path)
             } else {
-                let verbosity = match (very_verbose, verbose) {
-                    (true, _) => CommandVerbosity::VeryVerbose,
-                    (_, true) => CommandVerbosity::Verbose,
-                    _ => CommandVerbosity::None,
+                let (verbosity, _subscribe) = match (very_verbose, verbose) {
+                    (true, _) => {
+                        let builder = tracing_subscriber::fmt().pretty();
+                        let subscriber = builder.finish();
+                        (
+                            CommandVerbosity::VeryVerbose,
+                            Some(tracing::subscriber::set_default(subscriber)),
+                        )
+                    }
+                    (_, true) => (CommandVerbosity::Verbose, None),
+                    _ => (CommandVerbosity::None, None),
                 };
                 // neko_to_kotatsu(
                 neko_to_kotatsu_command(
@@ -600,7 +585,6 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
                     verbosity,
                     favorites_name,
                     soft_match,
-                    print_output,
                     conf,
                 )
             }
@@ -616,9 +600,9 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
 
             if path.try_exists()? {
                 std::fs::remove_dir_all(&path)?;
-                println!("Deleted directory `{}`", path.display());
+                info!("Deleted directory `{}`", path.display());
             } else {
-                println!("Data does not exist/is already deleted.")
+                info!("Data does not exist/is already deleted.")
             }
             Ok(CommandResult::None)
         }

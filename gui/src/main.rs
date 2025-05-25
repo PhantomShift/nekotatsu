@@ -2,6 +2,7 @@
 
 use rfd;
 use slint::{self, ComponentHandle};
+use std::io::Read;
 use tokio;
 
 use nekotatsu::command::{self, CommandResult, Commands};
@@ -28,10 +29,30 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
         let output = Some(app.get_out_path().to_string());
         let favorites_name = app.get_library_name().to_string();
         let verbose = app.get_verbose_output();
-        let print_output = !app.get_view_output();
+        let view_output = app.get_view_output();
         let cc_handle = app.as_weak();
         app.set_processing(true);
         tokio::spawn(async move {
+            let (mut output_buffer, trace_guard, reader) = if view_output {
+                let output_buffer = Vec::<u8>::new();
+                let (reader, writer) = std::io::pipe().unwrap();
+                let subscriber = nekotatsu::tracing_subscriber::fmt()
+                    .with_ansi(false)
+                    .with_file(false)
+                    .with_level(true)
+                    .with_target(false)
+                    .without_time()
+                    .compact()
+                    .with_writer(std::sync::Arc::new(writer))
+                    .finish();
+
+                let trace_guard =
+                    nekotatsu::nekotatsu_core::tracing::subscriber::set_default(subscriber);
+                (Some(output_buffer), Some(trace_guard), Some(reader))
+            } else {
+                (None, None, None)
+            };
+
             let result = command::run_command(Commands::Convert {
                 input,
                 output,
@@ -41,9 +62,17 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
                 reverse: false,
                 soft_match: false,
                 force: true,
-                print_output,
                 config_file: None,
             });
+
+            drop(trace_guard);
+            if let (Some(mut reader), Some(mut output_buffer)) = (reader, output_buffer.as_mut()) {
+                reader
+                    .read_to_end(&mut output_buffer)
+                    .expect("output be readable");
+                drop(reader);
+            };
+
             cc_handle
                 .upgrade_in_event_loop(move |app| {
                     app.set_processing(false);
@@ -51,14 +80,16 @@ fn run_app_inner() -> Result<(), slint::PlatformError> {
                         Ok(child) => {
                             match result {
                                 Ok(result) => {
-                                    if let crate::CommandResult::Success(path, output) = result {
+                                    if let crate::CommandResult::Success(path) = result {
                                         child.set_description(format!("Saved to '{path}'").into());
-                                        if !print_output {
+                                        if let Some(output_buffer) = output_buffer {
+                                            let output =
+                                                String::from_utf8_lossy(&output_buffer).to_string();
                                             child.set_lines(output.lines().count() as i32);
                                             child.set_child_text(output.into());
                                             child
                                                 .set_init_height(app.window().size().height as i32);
-                                        }
+                                        };
                                     }
                                 }
                                 Err(e) => {

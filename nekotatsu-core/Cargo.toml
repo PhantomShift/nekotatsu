@@ -14,3 +14,4 @@ toml = "0.8.19"
 mlua = { version = "0.10.3", features = ["luau", "macros"] }
 lua_derive = { path = "./lua_derive" }
 url = "2.5.4"
+tracing = "0.1.41"

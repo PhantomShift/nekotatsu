@@ -4,8 +4,11 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
     fs::File,
-    io::{self, Read, Write},
+    io::{self, Read},
 };
+pub use tracing;
+#[allow(unused_imports)]
+use tracing::{debug, error, info, trace, warn};
 
 pub mod config;
 pub mod extensions;
@@ -20,21 +23,6 @@ use kotatsu::*;
 
 const CATEGORY_DEFAULT: i64 = 2;
 const CATEGORY_OFFSET: i64 = CATEGORY_DEFAULT + 1;
-
-#[allow(unused_variables)]
-pub trait Logger {
-    fn log_info(&mut self, message: &str) -> () {}
-    fn log_verbose(&mut self, message: &str) -> () {
-        self.log_info(message);
-    }
-    fn log_very_verbose(&mut self, message: &str) -> () {
-        self.log_verbose(message);
-    }
-
-    fn capture_output(&mut self) -> String {
-        String::new()
-    }
-}
 
 #[derive(Debug)]
 pub enum ConversionError {
@@ -340,7 +328,6 @@ impl MangaConverter {
         mut self,
         backup: nekotatsu::neko::Backup,
         favorites_name: &str,
-        logger: &mut dyn Logger,
         source_filter: &mut dyn FnMut(&SourceInfo) -> bool,
     ) -> MangaConversionResult {
         let mut result_categories = Vec::with_capacity(backup.backup_categories.len() + 1);
@@ -381,10 +368,10 @@ impl MangaConverter {
 
         for manga in backup.backup_manga.iter() {
             if manga.source == 0 {
-                logger.log_verbose(&format!(
-                    "[WARNING] Unable to convert '{}', local manga currently unsupported",
+                warn!(
+                    "Unable to convert '{}', local manga currently unsupported",
                     manga.title
-                ));
+                );
                 errored_manga += 1;
                 continue;
             }
@@ -404,13 +391,13 @@ impl MangaConverter {
 
             if source.name == SourceInfo::default().name {
                 let message = format!(
-                    "[WARNING] Unable to convert '{}', unknown Tachiyomi source (ID {})",
+                    "Unable to convert '{}', unknown Tachiyomi source (ID {})",
                     manga.title, manga.source
                 );
                 if unknown_sources.contains(&manga.source.to_string()) {
-                    logger.log_very_verbose(&message);
+                    warn!("{}", &message);
                 } else {
-                    logger.log_verbose(&message);
+                    warn!("{}", &message);
                     unknown_sources.insert(manga.source.to_string());
                 }
 
@@ -428,19 +415,19 @@ impl MangaConverter {
                 Err(err) => {
                     let message = match err {
                         ConversionError::URLParseError(err) => format!(
-                            "[WARNING] Unable to convert '{}' from source {} ({}), a URL failed to be parsed: {:?}",
+                            "Unable to convert '{}' from source {} ({}), a URL failed to be parsed: {:?}",
                             manga.title, source.name, source.baseUrl, err
                         ),
                         ConversionError::URLCheckError(err) => format!(
-                            "[WARNING] Unable to convert '{}' from source {} ({}), a URL failed a check: {}",
+                            "Unable to convert '{}' from source {} ({}), a URL failed a check: {}",
                             manga.title, source.name, source.baseUrl, err
                         ),
                         ConversionError::ScriptError(err) => format!(
-                            "[WARNING] Unable to convert '{}' from source {} ({}), runtime error in script occurred: {:?}",
+                            "Unable to convert '{}' from source {} ({}), runtime error in script occurred: {:?}",
                             manga.title, source.name, source.baseUrl, err
                         ),
                     };
-                    logger.log_verbose(&message);
+                    error!("{}", &message);
                     errored_sources_count
                         .entry(source.name.clone())
                         .and_modify(|e| *e += 1)
@@ -451,14 +438,11 @@ impl MangaConverter {
             };
 
             if kotatsu_manga.source == "UNKNOWN" {
-                let message = format!(
-                    "[WARNING] Unable to convert '{}' from source {} ({}), Kotatsu parser not found",
+                warn!(
+                    "Unable to convert '{}' from source {} ({}), Kotatsu parser not found",
                     manga.title, source.name, source.baseUrl
                 );
-                if errored_sources.contains_key(&source.name) {
-                    logger.log_very_verbose(&message)
-                } else {
-                    logger.log_verbose(&message);
+                if !errored_sources.contains_key(&source.name) {
                     errored_sources.insert(source.name.clone(), source.baseUrl);
                 }
                 errored_sources_count
@@ -509,7 +493,7 @@ impl MangaConverter {
                         .correct_chapter_identifier(&kotatsu_manga.source, path)
                         .unwrap_or_else(|err| {
                             if !chapter_error_logged {
-                                logger.log_verbose(&format!("[WARNING] Error getting chapter ID for {}, there may be issues for this manga's chapters. Error: {err:?}", &kotatsu_manga.title));
+                                warn!("Error getting chapter ID for {}, there may be issues for this manga's chapters. Error: {err:?}", &kotatsu_manga.title);
                                 chapter_error_logged = true
                             }
                             path.to_string()
@@ -592,23 +576,6 @@ impl MangaConverter {
             errored_sources,
             ignored_manga,
         }
-    }
-}
-
-impl Logger for std::io::Stdout {
-    fn log_info(&mut self, message: &str) -> () {
-        let _ = self.write(message.as_bytes());
-        let _ = self.write(b"\n");
-    }
-}
-
-impl Logger for Vec<String> {
-    fn log_info(&mut self, message: &str) -> () {
-        self.push(message.to_string());
-    }
-
-    fn capture_output(&mut self) -> String {
-        self.join("\n")
     }
 }
 

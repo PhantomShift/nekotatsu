@@ -6,6 +6,7 @@ use std::{
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 use zip::ZipArchive;
 
 enum DomainCaptureMethod {
@@ -246,7 +247,7 @@ pub fn update_parsers(new: &File, mut save_to: &File) -> std::io::Result<()> {
             .unwrap_or(Vec::new());
 
         if domains.len() == 0 {
-            println!("[WARNING]: Kotatsu parser was detected but domains could not be found automatically. File path: '{path}'")
+            warn!("Kotatsu parser was detected but domains could not be found automatically. File path: '{path}'")
         }
 
         for c in captures {

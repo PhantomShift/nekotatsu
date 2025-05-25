@@ -1,2 +1,3 @@
 pub mod command;
-use nekotatsu_core;
+pub use nekotatsu_core;
+pub use tracing_subscriber;
