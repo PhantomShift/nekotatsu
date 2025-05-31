@@ -23,18 +23,18 @@ type AppPathStrategy = etcetera::app_strategy::Apple;
 #[cfg(not(target_os = "macos"))]
 type AppPathStrategy = etcetera::app_strategy::Xdg;
 
-static APP_PATH: LazyLock<AppPathStrategy> = LazyLock::new(|| {
+pub static APP_PATH: LazyLock<AppPathStrategy> = LazyLock::new(|| {
     etcetera::app_strategy::choose_native_strategy(AppStrategyArgs {
         app_name: "Nekotatsu".to_string(),
         ..Default::default()
     })
     .expect("application paths should be findable on all used platforms")
 });
-static DEFAULT_TACHI_SOURCE_PATH: LazyLock<PathBuf> =
+pub static DEFAULT_TACHI_SOURCE_PATH: LazyLock<PathBuf> =
     LazyLock::new(|| APP_PATH.data_dir().join("tachi_sources.json"));
-static DEFAULT_KOTATSU_PARSE_PATH: LazyLock<PathBuf> =
+pub static DEFAULT_KOTATSU_PARSE_PATH: LazyLock<PathBuf> =
     LazyLock::new(|| APP_PATH.data_dir().join("kotatsu_parsers.json"));
-static DEFAULT_SCRIPT_PATH: LazyLock<PathBuf> =
+pub static DEFAULT_SCRIPT_PATH: LazyLock<PathBuf> =
     LazyLock::new(|| APP_PATH.data_dir().join("correction.luau"));
 
 enum PathType {
