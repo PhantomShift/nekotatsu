@@ -1,7 +1,6 @@
 use clap::{Parser, Subcommand};
 use etcetera::{app_strategy::AppStrategy, AppStrategyArgs};
 use flate2::{write::GzEncoder, Compression};
-use nekotatsu_core::tracing::{debug, error};
 use prost::Message;
 use std::{
     collections::HashMap,
@@ -9,10 +8,11 @@ use std::{
     path::PathBuf,
     sync::LazyLock,
 };
+use ureq::http::Uri;
 
 use crate::nekotatsu_core::config::SourceFilterList;
 use crate::nekotatsu_core::kotatsu::{self, *};
-use crate::nekotatsu_core::tracing::{info, warn};
+use crate::nekotatsu_core::tracing::{debug, error, info, warn};
 use crate::nekotatsu_core::*;
 
 #[cfg(target_os = "windows")]
@@ -38,7 +38,7 @@ static DEFAULT_SCRIPT_PATH: LazyLock<PathBuf> =
     LazyLock::new(|| APP_PATH.data_dir().join("correction.luau"));
 
 enum PathType {
-    Url(reqwest::Url),
+    Url(Uri),
     Filesystem(PathBuf),
 }
 
@@ -46,11 +46,10 @@ impl TryFrom<&str> for PathType {
     type Error = std::io::Error;
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let path = {
-            if let Ok(url) = reqwest::Url::parse(value) {
-                if let Ok(path) = url.to_file_path() {
-                    path
-                } else {
-                    return Ok(PathType::Url(url));
+            if let Ok(uri) = Uri::try_from(value) {
+                match uri.scheme() {
+                    Some(scheme) if scheme.as_str() != "file" => return Ok(PathType::Url(uri)),
+                    _ => PathBuf::from(uri.path()),
                 }
             } else {
                 PathBuf::from(value)
@@ -440,6 +439,7 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
                 std::fs::create_dir_all(&data_path)?;
             }
 
+            let agent = ureq::agent();
             let attempt_download = |destination: &str,
                                     from: &str,
                                     force: bool,
@@ -457,14 +457,13 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
                             error!("Error getting file: if this is a url, did you include 'https://'? Original error: {e:?}");
                         }
 
-                        Ok(PathType::Url(url)) => {
-                            let response = reqwest::blocking::get(url);
+                        Ok(PathType::Url(uri)) => {
+                            let response = agent.get(uri).call();
                             match response {
                                 Ok(response) if response.status().is_success() => {
-                                    let b = response
-                                        .bytes()
-                                        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-                                    std::fs::write(&output_path, b)?;
+                                    let mut b = response.into_body().into_reader();
+                                    let mut file = std::fs::File::create(&output_path)?;
+                                    std::io::copy(&mut b, &mut file)?;
                                     info!("{success_message}")
                                 }
                                 Ok(failed) => {
