@@ -1,9 +1,15 @@
-workspace = { members = ["tools", "gui", "nekotatsu-core", "nekotatsu-core/lua_derive"] }
 [package]
 name = "nekotatsu"
 version = "1.4.1"
 resolver = "2"
 edition="2021"
+
+[workspace]
+members = ["tools", "gui", "nekotatsu-core", "nekotatsu-core/lua_derive"]
+
+[workspace.package]
+repository = "https://github.com/phantomshift/nekotatsu"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
