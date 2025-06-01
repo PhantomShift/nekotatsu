@@ -113,6 +113,9 @@ pub enum Commands {
 
         #[arg(short, long)]
         config_file: Option<PathBuf>,
+
+        #[arg(hide(true))]
+        disable_default_subscriber: bool,
     },
 
     /// Downloads latest Tachiyomi source information and
@@ -532,6 +535,7 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
             soft_match,
             force,
             config_file,
+            disable_default_subscriber,
             // TODO: Category sorting method override, automatically detect if it should use default from filename
         } => {
             let conf = match config_file {
@@ -572,14 +576,15 @@ pub fn run_command(command: Commands) -> std::io::Result<CommandResult> {
                 kotatsu_to_neko(input_path, output_path)
             } else {
                 let (verbosity, _subscribe) = match (very_verbose, verbose) {
-                    (true, _) => {
-                        let builder = tracing_subscriber::fmt().pretty();
-                        let subscriber = builder.finish();
-                        (
-                            CommandVerbosity::VeryVerbose,
-                            Some(tracing::subscriber::set_default(subscriber)),
-                        )
-                    }
+                    (true, _) => (CommandVerbosity::VeryVerbose, {
+                        if !disable_default_subscriber {
+                            let builder = tracing_subscriber::fmt().pretty();
+                            let subscriber = builder.finish();
+                            Some(tracing::subscriber::set_default(subscriber))
+                        } else {
+                            None
+                        }
+                    }),
                     (_, true) => (CommandVerbosity::Verbose, None),
                     _ => (CommandVerbosity::None, None),
                 };
