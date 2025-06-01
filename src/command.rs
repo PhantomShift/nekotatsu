@@ -37,6 +37,12 @@ pub static DEFAULT_KOTATSU_PARSE_PATH: LazyLock<PathBuf> =
 pub static DEFAULT_SCRIPT_PATH: LazyLock<PathBuf> =
     LazyLock::new(|| APP_PATH.data_dir().join("correction.luau"));
 
+pub static DEFAULT_TACHI_DOWNLOAD: &str =
+    "https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json";
+pub static DEFAULT_KOTATSU_DOWNLOAD: &str =
+    "https://github.com/KotatsuApp/kotatsu-parsers/archive/refs/heads/master.zip";
+pub static DEFAULT_SCRIPT_DOWNLOAD: &str = "https://raw.githubusercontent.com/phantomshift/nekotatsu/master/nekotatsu-core/src/correction.luau";
+
 enum PathType {
     Url(Uri),
     Filesystem(PathBuf),
@@ -115,15 +121,15 @@ pub enum Commands {
     /// as `tachi_sources.json` and `kotatsu_parsers.json`.
     Update {
         /// Download URL or file path for Kotatsu parsers repo.
-        #[arg(short, long, default_value_t = String::from("https://github.com/KotatsuApp/kotatsu-parsers/archive/refs/heads/master.zip"))]
+        #[arg(short, long, default_value_t = String::from(DEFAULT_KOTATSU_DOWNLOAD))]
         kotatsu_link: String,
 
         /// Download URL or file path for Tachiyomi extension json list (minified)
-        #[arg(short, long, default_value_t = String::from("https://raw.githubusercontent.com/keiyoushi/extensions/repo/index.min.json"))]
+        #[arg(short, long, default_value_t = String::from(DEFAULT_TACHI_DOWNLOAD))]
         tachi_link: String,
 
         /// Download URL or ifle path for correction script
-        #[arg(short, long, default_value_t = String::from("https://raw.githubusercontent.com/phantomshift/nekotatsu/master/nekotatsu-core/src/correction.luau"))]
+        #[arg(short, long, default_value_t = String::from(DEFAULT_SCRIPT_DOWNLOAD))]
         script_link: String,
 
         /// Force download of all files even if they already exist
