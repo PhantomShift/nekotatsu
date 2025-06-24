@@ -1,6 +1,6 @@
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, fmt::Display, path::Path};
 
-use mlua::{self, Function};
+use mlua::{self, AsChunk, Function};
 
 const CORRECT_RELATIVE_URL: &str = "correct_relative_url";
 const CORRECT_PUBLIC_URL: &str = "correct_public_url";
@@ -30,15 +30,19 @@ pub struct ScriptRuntime {
 }
 
 impl ScriptRuntime {
-    pub fn create(script_path: &Path) -> Result<Self> {
-        let script_file = std::fs::read(script_path).map_err(Error::LoadError)?;
+    pub fn from_chunk<'a, T: AsChunk<'a> + Clone>(chunk: T) -> Result<Self> {
         let lua = mlua::Lua::new();
 
-        lua.load(script_file).exec().map_err(Error::RuntimeError)?;
+        lua.load(chunk).exec().map_err(Error::RuntimeError)?;
 
         let functions = ScriptRuntime::get_functions(&lua)?;
 
         return Ok(Self { lua, functions });
+    }
+
+    pub fn create(script_path: &Path) -> Result<Self> {
+        let script_file = std::fs::read(script_path).map_err(Error::LoadError)?;
+        return Self::from_chunk(script_file);
     }
 
     fn get_functions(lua: &mlua::Lua) -> Result<HashMap<String, Function>> {
