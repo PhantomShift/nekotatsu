@@ -6,6 +6,7 @@ use std::{
     fs::File,
     io::{self, Read},
 };
+use thiserror::Error;
 pub use tracing;
 #[allow(unused_imports)]
 use tracing::{debug, error, info, trace, warn};
@@ -24,11 +25,14 @@ use kotatsu::*;
 const CATEGORY_DEFAULT: i64 = 2;
 const CATEGORY_OFFSET: i64 = CATEGORY_DEFAULT + 1;
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum ConversionError {
+    #[error("error checking URL: {0}")]
     URLCheckError(String),
-    URLParseError(url::ParseError),
-    ScriptError(script_interface::Error),
+    #[error("error parsing URL")]
+    URLParseError(#[from] url::ParseError),
+    #[error("error in script")]
+    ScriptError(#[from] script_interface::Error),
 }
 
 /// Note that at the time of writing, mainline Mihon actually
@@ -268,8 +272,7 @@ impl MangaConverter {
             .extensions
             .get_source(manga.source)
             .expect("source should exist if we are converting the manga");
-        let base_url =
-            url::Url::parse(&source_info.baseUrl).map_err(ConversionError::URLParseError)?;
+        let base_url = url::Url::parse(&source_info.baseUrl)?;
         // Consistency: Kotatsu requires that the base url does not include scheme
         // Note: using BeforeHost instead of grabbing domain directly
         // because both in Kotatsu and Tachiyomi,
@@ -278,20 +281,17 @@ impl MangaConverter {
         let source_name = self.get_source_name(manga);
         let relative_url = self
             .runtime
-            .correct_relative_url(&source_name, &domain, &manga.url)
-            .map_err(ConversionError::ScriptError)?;
+            .correct_relative_url(&source_name, &domain, &manga.url)?;
         let manga_identifier = self
             .runtime
-            .correct_manga_identifier(&source_name, &relative_url)
-            .map_err(ConversionError::ScriptError)?;
+            .correct_manga_identifier(&source_name, &relative_url)?;
         let public_url = self
             .runtime
-            .correct_public_url(&source_name, &domain, &manga.url)
-            .map_err(ConversionError::ScriptError)?;
+            .correct_public_url(&source_name, &domain, &manga.url)?;
 
         // Some very light validation to catch errors early
         // Note: not comparing domains since fixes may include domain migration
-        let pub_url = url::Url::parse(&public_url).map_err(ConversionError::URLParseError)?;
+        let pub_url = url::Url::parse(&public_url)?;
         let pub_path = pub_url.path();
         if pub_path == "/" {
             return Err(ConversionError::URLCheckError(format!(

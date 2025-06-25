@@ -1,6 +1,7 @@
 use std::{collections::HashMap, path::Path};
 
 use mlua::{self, AsChunk, Function};
+use thiserror::Error;
 
 const CORRECT_RELATIVE_URL: &str = "correct_relative_url";
 const CORRECT_PUBLIC_URL: &str = "correct_public_url";
@@ -14,11 +15,14 @@ const REQUIRED_FUNCTIONS: &[&str] = &[
     CORRECT_CHAPTER_IDENTIFIER,
 ];
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum Error {
-    LoadError(std::io::Error),
+    #[error("error loading script")]
+    LoadError(#[from] std::io::Error),
+    #[error("script is not complete: {0}")]
     IncompleteError(String),
-    RuntimeError(mlua::Error),
+    #[error("error running script")]
+    RuntimeError(#[from] mlua::Error),
 }
 
 type Result<T> = std::result::Result<T, Error>;
@@ -33,7 +37,7 @@ impl ScriptRuntime {
     pub fn from_chunk<'a, T: AsChunk<'a> + Clone>(chunk: T) -> Result<Self> {
         let lua = mlua::Lua::new();
 
-        lua.load(chunk).exec().map_err(Error::RuntimeError)?;
+        lua.load(chunk).exec()?;
 
         let functions = ScriptRuntime::get_functions(&lua)?;
 
@@ -41,7 +45,7 @@ impl ScriptRuntime {
     }
 
     pub fn create(script_path: &Path) -> Result<Self> {
-        let script_file = std::fs::read(script_path).map_err(Error::LoadError)?;
+        let script_file = std::fs::read(script_path)?;
         return Self::from_chunk(script_file);
     }
 
@@ -49,11 +53,7 @@ impl ScriptRuntime {
         let mut functions = HashMap::new();
 
         for &func_name in REQUIRED_FUNCTIONS {
-            if let Some(function) = lua
-                .globals()
-                .get::<Option<Function>>(func_name)
-                .map_err(Error::RuntimeError)?
-            {
+            if let Some(function) = lua.globals().get::<Option<Function>>(func_name)? {
                 functions.insert(func_name.to_string(), function);
             } else {
                 return Err(Error::IncompleteError(format!(
