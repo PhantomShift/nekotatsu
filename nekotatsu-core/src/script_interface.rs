@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display, path::Path};
+use std::{collections::HashMap, path::Path};
 
 use mlua::{self, AsChunk, Function};
 

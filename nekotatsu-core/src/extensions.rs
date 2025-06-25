@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use std::io::Read;
 
 #[allow(non_snake_case)]
 #[derive(Debug, Deserialize, Clone)]
@@ -50,11 +49,9 @@ impl ExtensionList {
         Self { inner: list }
     }
 
-    pub fn try_from_file(mut file: std::fs::File) -> std::io::Result<Self> {
-        let mut extensions = String::new();
-        file.read_to_string(&mut extensions)?;
+    pub fn try_from_file(file: std::fs::File) -> std::io::Result<Self> {
         Ok(Self {
-            inner: serde_json::from_str(&extensions)?,
+            inner: serde_json::from_reader(file)?,
         })
     }
 

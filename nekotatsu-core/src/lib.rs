@@ -187,10 +187,8 @@ impl MangaConverter {
         }
     }
 
-    pub fn try_from_files(mut parsers: File, extensions: File) -> std::io::Result<Self> {
-        let mut parser_list = String::new();
-        parsers.read_to_string(&mut parser_list)?;
-        let parsers: Vec<KotatsuParser> = serde_json::from_str(&parser_list)
+    pub fn try_from_files(parsers: File, extensions: File) -> std::io::Result<Self> {
+        let parsers: Vec<KotatsuParser> = serde_json::from_reader(parsers)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         let extensions = extensions::ExtensionList::try_from_file(extensions)?;
         let sources = HashMap::new();
